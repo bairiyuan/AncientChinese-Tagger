@@ -1,0 +1,125 @@
+# ===================== Windows 系统专属忽略 =====================
+# Windows 系统文件/缓存
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+# Windows 临时文件
+*.tmp
+*.temp
+~$*
+
+# ===================== 通用忽略规则 =====================
+# 编辑器/IDE配置（避免团队冲突）
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.iml
+*.ipr
+*.iws
+.coverage
+
+# ===================== 后端(Python/FastAPI)忽略规则 =====================
+# 虚拟环境
+backend/venv/
+backend/ENV/
+backend/env/
+backend/.env/
+backend/.venv/
+
+# Python字节码
+__pycache__/
+backend/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# 依赖缓存
+backend/pip-wheel-metadata/
+backend/.pip-cache/
+
+# 日志文件
+backend/*.log
+backend/logs/
+
+# 环境变量（敏感信息，本地配置）
+backend/.env
+backend/.env.local
+
+# ===================== 前端忽略规则 =====================
+# npm依赖
+frontend/node_modules/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/.pnpm-debug.log*
+
+# 构建产物
+frontend/dist/
+frontend/build/
+frontend/out/
+
+# 缓存文件
+frontend/.cache/
+frontend/.parcel-cache/
+frontend/.eslintcache
+
+# 环境变量（前端本地配置）
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# 临时文件
+frontend/.tmp/
+frontend/temp/
+
+# ===================== 数据库相关 =====================
+# MySQL本地配置/日志
+*.sql
+*.sql.gz
+mysql-bin.log
+*.err
+backup/
+data/
+
+# ===================== 项目专属忽略 =====================
+# 测试文件/目录
+test/
+tests/
+backend/test/
+frontend/test/
+
+# 导出的临时数据
+export_data/
+backend/export_data/
