@@ -20,7 +20,11 @@ AncientChinese是一个面向古汉语文本的智能标注平台，集成了自
 
 - **数据导出**：支持导出文档及标注数据
 
-  ![1](C:\Users\user\Desktop\AncientChinese\1.png)
+  
+  
+  页面流程图：
+  
+  ![1](.docs\1.png)
 
 ## 技术选型
 
