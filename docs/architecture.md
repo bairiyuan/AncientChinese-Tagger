@@ -2,7 +2,7 @@
 
 ## 前端架构
 
-<img src="C:\Users\user\Downloads\Gemini_Generated_Image_mq3dq4mq3dq4mq3d.png" alt="Gemini_Generated_Image_mq3dq4mq3dq4mq3d" style="zoom:50%;" />
+<img src="3.png" alt="Gemini_Generated_Image_mq3dq4mq3dq4mq3d" style="zoom:50%;" />
 
 ## 后端架构
 
