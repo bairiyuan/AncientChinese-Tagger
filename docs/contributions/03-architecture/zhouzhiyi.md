@@ -14,7 +14,7 @@
 
 -前端架构设计
 
-<img src="C:\Users\user\Downloads\Gemini_Generated_Image_mq3dq4mq3dq4mq3d.png" alt="Gemini_Generated_Image_mq3dq4mq3dq4mq3d" style="zoom:50%;" />
+<img src="docs/3.png" alt="Gemini_Generated_Image_mq3dq4mq3dq4mq3d" style="zoom:50%;" />
 
 ### 2.技术选型
 
