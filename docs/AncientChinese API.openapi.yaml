@@ -1,0 +1,1314 @@
+openapi: 3.0.1
+info:
+  title: AncientChinese API
+  description: >-
+    AncientChinese 古汉语智能标注平台后端接口设计（基于 MySQL：users / projects / documents /
+    annotations）
+  version: 1.0.0
+tags:
+  - name: Users
+  - name: Projects
+  - name: Documents
+  - name: Annotations
+paths:
+  /api/users:
+    get:
+      summary: 获取用户列表
+      deprecated: false
+      description: ''
+      operationId: listUsers
+      tags:
+        - Users
+      parameters:
+        - name: page
+          in: query
+          description: 页码
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          description: 每页数量
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: 用户列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/User'
+                          total:
+                            type: integer
+          headers: {}
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+    post:
+      summary: 创建用户
+      deprecated: false
+      description: ''
+      operationId: createUser
+      tags:
+        - Users
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+        required: true
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+          headers: {}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: 请求参数错误
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+  /api/users/{userId}:
+    get:
+      summary: 获取单个用户详情
+      deprecated: false
+      description: ''
+      operationId: getUser
+      tags:
+        - Users
+      parameters:
+        - name: userId
+          in: path
+          description: ''
+          required: true
+          example: 0
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 用户详情
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+          headers: {}
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 资源不存在
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+    put:
+      summary: 完全更新用户
+      deprecated: false
+      description: ''
+      operationId: updateUser
+      tags:
+        - Users
+      parameters:
+        - name: userId
+          in: path
+          description: ''
+          required: true
+          example: 0
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+        required: true
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+          headers: {}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: 请求参数错误
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 资源不存在
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+    patch:
+      summary: 部分更新用户
+      deprecated: false
+      description: ''
+      operationId: patchUser
+      tags:
+        - Users
+      parameters:
+        - name: userId
+          in: path
+          description: ''
+          required: true
+          example: 0
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserPatch'
+        required: true
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+          headers: {}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: 请求参数错误
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 资源不存在
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+    delete:
+      summary: 删除用户
+      deprecated: false
+      description: ''
+      operationId: deleteUser
+      tags:
+        - Users
+      parameters:
+        - name: userId
+          in: path
+          description: ''
+          required: true
+          example: 0
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+          headers: {}
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 资源不存在
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+  /api/users/login:
+    post:
+      summary: 用户登录
+      deprecated: false
+      description: 根据用户名密码登录，返回token
+      tags:
+        - Users
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                  description: 用户名
+                password:
+                  type: string
+                  description: 密码
+        required: true
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: 登录成功
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      username:
+                        type: string
+                      token:
+                        type: string
+                        description: 登录凭证
+          headers: {}
+        '401':
+          description: 用户名或密码错误
+          headers: {}
+      security: []
+  /api/projects:
+    get:
+      summary: 获取项目列表
+      deprecated: false
+      description: ''
+      operationId: listProjects
+      tags:
+        - Projects
+      parameters:
+        - name: ownerId
+          in: query
+          description: 按所有者过滤
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 项目列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Project'
+          headers: {}
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+    post:
+      summary: 创建项目
+      deprecated: false
+      description: ''
+      operationId: createProject
+      tags:
+        - Projects
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectCreate'
+        required: true
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Project'
+          headers: {}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: 请求参数错误
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+  /api/projects/{projectId}:
+    get:
+      summary: 获取项目详情
+      deprecated: false
+      description: ''
+      operationId: getProject
+      tags:
+        - Projects
+      parameters:
+        - name: projectId
+          in: path
+          description: ''
+          required: true
+          example: 0
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 项目详情
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Project'
+          headers: {}
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 资源不存在
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+    put:
+      summary: 完全更新项目
+      deprecated: false
+      description: ''
+      operationId: updateProject
+      tags:
+        - Projects
+      parameters:
+        - name: projectId
+          in: path
+          description: ''
+          required: true
+          example: 0
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectUpdate'
+        required: true
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Project'
+          headers: {}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: 请求参数错误
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 资源不存在
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+    patch:
+      summary: 部分更新项目
+      deprecated: false
+      description: ''
+      operationId: patchProject
+      tags:
+        - Projects
+      parameters:
+        - name: projectId
+          in: path
+          description: ''
+          required: true
+          example: 0
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectPatch'
+        required: true
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Project'
+          headers: {}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: 请求参数错误
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 资源不存在
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+    delete:
+      summary: 删除项目
+      deprecated: false
+      description: ''
+      operationId: deleteProject
+      tags:
+        - Projects
+      parameters:
+        - name: projectId
+          in: path
+          description: ''
+          required: true
+          example: 0
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+          headers: {}
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 资源不存在
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+  /api/projects/{projectId}/documents:
+    get:
+      summary: 获取项目下文档列表
+      deprecated: false
+      description: ''
+      operationId: listDocumentsByProject
+      tags:
+        - Documents
+      parameters:
+        - name: projectId
+          in: path
+          description: ''
+          required: true
+          example: 0
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 文档列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Document'
+          headers: {}
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 资源不存在
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+    post:
+      summary: 在项目下创建文档
+      deprecated: false
+      description: ''
+      operationId: createDocumentInProject
+      tags:
+        - Documents
+      parameters:
+        - name: projectId
+          in: path
+          description: ''
+          required: true
+          example: 0
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentCreate'
+        required: true
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Document'
+          headers: {}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: 请求参数错误
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 资源不存在
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+  /api/documents:
+    get:
+      summary: 全局搜索文档
+      deprecated: false
+      description: ''
+      operationId: listDocuments
+      tags:
+        - Documents
+      parameters:
+        - name: projectId
+          in: query
+          description: 按项目过滤
+          required: false
+          schema:
+            type: integer
+        - name: keyword
+          in: query
+          description: 按标题或内容关键字模糊搜索
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 文档列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Document'
+          headers: {}
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+  /api/documents/{documentId}:
+    get:
+      summary: 获取文档详情
+      deprecated: false
+      description: ''
+      operationId: getDocument
+      tags:
+        - Documents
+      parameters:
+        - name: documentId
+          in: path
+          description: ''
+          required: true
+          example: 0
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 文档详情
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Document'
+          headers: {}
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 资源不存在
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+    put:
+      summary: 完整更新文档
+      deprecated: false
+      description: ''
+      operationId: updateDocument
+      tags:
+        - Documents
+      parameters:
+        - name: documentId
+          in: path
+          description: ''
+          required: true
+          example: 0
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentUpdate'
+        required: true
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Document'
+          headers: {}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: 请求参数错误
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 资源不存在
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+    patch:
+      summary: 部分更新文档
+      deprecated: false
+      description: ''
+      operationId: patchDocument
+      tags:
+        - Documents
+      parameters:
+        - name: documentId
+          in: path
+          description: ''
+          required: true
+          example: 0
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentPatch'
+        required: true
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Document'
+          headers: {}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: 请求参数错误
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 资源不存在
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+    delete:
+      summary: 删除文档
+      deprecated: false
+      description: ''
+      operationId: deleteDocument
+      tags:
+        - Documents
+      parameters:
+        - name: documentId
+          in: path
+          description: ''
+          required: true
+          example: 0
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+          headers: {}
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 资源不存在
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+  /api/documents/{documentId}/annotations:
+    get:
+      summary: 获取文档下的标注列表
+      deprecated: false
+      description: ''
+      operationId: listAnnotationsByDocument
+      tags:
+        - Annotations
+      parameters:
+        - name: documentId
+          in: path
+          description: ''
+          required: true
+          example: 0
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 标注列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Annotation'
+          headers: {}
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 资源不存在
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+    post:
+      summary: 在文档下创建标注
+      deprecated: false
+      description: ''
+      operationId: createAnnotationInDocument
+      tags:
+        - Annotations
+      parameters:
+        - name: documentId
+          in: path
+          description: ''
+          required: true
+          example: 0
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnnotationCreate'
+        required: true
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Annotation'
+          headers: {}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: 请求参数错误
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 资源不存在
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+  /api/annotations:
+    get:
+      summary: 全局搜索标注
+      deprecated: false
+      description: ''
+      operationId: listAnnotations
+      tags:
+        - Annotations
+      parameters:
+        - name: projectId
+          in: query
+          description: ''
+          required: false
+          schema:
+            type: integer
+        - name: documentId
+          in: query
+          description: ''
+          required: false
+          schema:
+            type: integer
+        - name: entityType
+          in: query
+          description: ''
+          required: false
+          schema:
+            $ref: '#/components/schemas/EntityType'
+      responses:
+        '200':
+          description: 标注列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Annotation'
+          headers: {}
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+  /api/annotations/{annotationId}:
+    get:
+      summary: 获取标注详情
+      deprecated: false
+      description: ''
+      operationId: getAnnotation
+      tags:
+        - Annotations
+      parameters:
+        - name: annotationId
+          in: path
+          description: ''
+          required: true
+          example: 0
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 标注详情
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Annotation'
+          headers: {}
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 资源不存在
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+    put:
+      summary: 完整更新标注
+      deprecated: false
+      description: ''
+      operationId: updateAnnotation
+      tags:
+        - Annotations
+      parameters:
+        - name: annotationId
+          in: path
+          description: ''
+          required: true
+          example: 0
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnnotationUpdate'
+        required: true
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Annotation'
+          headers: {}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: 请求参数错误
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 资源不存在
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+    patch:
+      summary: 部分更新标注
+      deprecated: false
+      description: ''
+      operationId: patchAnnotation
+      tags:
+        - Annotations
+      parameters:
+        - name: annotationId
+          in: path
+          description: ''
+          required: true
+          example: 0
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnnotationPatch'
+        required: true
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Annotation'
+          headers: {}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: 请求参数错误
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 资源不存在
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+    delete:
+      summary: 删除标注
+      deprecated: false
+      description: ''
+      operationId: deleteAnnotation
+      tags:
+        - Annotations
+      parameters:
+        - name: annotationId
+          in: path
+          description: ''
+          required: true
+          example: 0
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+          headers: {}
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: 资源不存在
+        '500':
+          $ref: '#/components/responses/InternalError'
+          description: 服务器内部错误
+      security: []
+components:
+  schemas:
+    ApiResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+          description: 业务状态码，0 表示成功
+          example: 0
+        message:
+          type: string
+          description: 描述信息
+          example: success
+        data:
+          description: 业务数据载体
+          type: 'null'
+    EntityType:
+      type: string
+      enum:
+        - person
+        - location
+        - time
+        - other
+      description: 实体类型
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        password:
+          type: string
+          description: 存储为哈希后的密码
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    UserCreate:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          maxLength: 50
+        password:
+          type: string
+          minLength: 6
+    UserUpdate:
+      allOf:
+        - $ref: '#/components/schemas/UserCreate'
+    UserPatch:
+      type: object
+      properties:
+        username:
+          type: string
+          maxLength: 50
+        password:
+          type: string
+          minLength: 6
+    Project:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        ownerId:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ProjectCreate:
+      type: object
+      required:
+        - name
+        - ownerId
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+          nullable: true
+        ownerId:
+          type: integer
+    ProjectUpdate:
+      allOf:
+        - $ref: '#/components/schemas/ProjectCreate'
+    ProjectPatch:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+          nullable: true
+        ownerId:
+          type: integer
+    Document:
+      type: object
+      properties:
+        id:
+          type: integer
+        projectId:
+          type: integer
+        title:
+          type: string
+          nullable: true
+        content:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    DocumentCreate:
+      type: object
+      required:
+        - title
+        - content
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        content:
+          type: string
+    DocumentUpdate:
+      allOf:
+        - $ref: '#/components/schemas/DocumentCreate'
+    DocumentPatch:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        content:
+          type: string
+    Annotation:
+      type: object
+      properties:
+        id:
+          type: integer
+        documentId:
+          type: integer
+        entity:
+          type: string
+          maxLength: 100
+        entityType:
+          $ref: '#/components/schemas/EntityType'
+        startPos:
+          type: integer
+          nullable: true
+        endPos:
+          type: integer
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    AnnotationCreate:
+      type: object
+      required:
+        - entity
+        - entityType
+        - startPos
+        - endPos
+      properties:
+        entity:
+          type: string
+          maxLength: 100
+        entityType:
+          $ref: '#/components/schemas/EntityType'
+        startPos:
+          type: integer
+        endPos:
+          type: integer
+    AnnotationUpdate:
+      allOf:
+        - $ref: '#/components/schemas/AnnotationCreate'
+    AnnotationPatch:
+      type: object
+      properties:
+        entity:
+          type: string
+          maxLength: 100
+        entityType:
+          $ref: '#/components/schemas/EntityType'
+        startPos:
+          type: integer
+        endPos:
+          type: integer
+  responses:
+    BadRequest:
+      description: 请求参数错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponse'
+    NotFound:
+      description: 资源不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponse'
+    InternalError:
+      description: 服务器内部错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponse'
+  securitySchemes: {}
+servers: []
+security: []
