@@ -1,212 +1,328 @@
 # AncientChinese —— API 设计
 
-本系统采用 **前后端分离架构**，前端通过 HTTP 请求调用后端 API 获取数据。
- 后端使用 **FastAPI** 框架开发，接口数据格式为 **JSON**。
+本文件根据 `docs/AncientChinese API.openapi.yaml` 同步整理。
 
 接口基础地址：
 
-```
+```text
 http://localhost:8000
 ```
 
-------
+统一响应结构：
 
-# 1 项目管理接口
-
-用于管理古文研究项目。
-
-### 1.1 创建项目
-
-```
-POST /projects
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {}
+}
 ```
 
-参数：
+---
 
-| 参数        | 类型   | 说明     |
-| ----------- | ------ | -------- |
-| name        | string | 项目名称 |
-| description | string | 项目描述 |
+## 1 Users 用户接口
 
-------
+### 1.1 获取用户列表
 
-### 1.2 获取项目列表
-
-```
-GET /projects
+```http
+GET /api/users
 ```
 
-返回项目列表数据。
+Query 参数：
 
-------
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| page | integer | 否 | 页码，默认 1，最小 1 |
+| pageSize | integer | 否 | 每页数量，默认 20，范围 1~100 |
 
-### 1.3 修改项目
+返回：`data.items`（用户数组）+ `data.total`（总数）
 
-```
-PUT /projects/{project_id}
-```
+### 1.2 创建用户
 
-参数：
-
-| 参数        | 类型   | 说明     |
-| ----------- | ------ | -------- |
-| name        | string | 项目名称 |
-| description | string | 项目描述 |
-
-------
-
-### 1.4 删除项目
-
-```
-DELETE /projects/{project_id}
+```http
+POST /api/users
 ```
 
-删除指定项目。
+Body 参数（JSON）：
 
-------
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| username | string | 是 | 用户名，最大 50 |
+| password | string | 是 | 密码，最小 6 |
 
-# 2 文档管理接口
+### 1.3 获取用户详情
 
-用于管理项目中的古文文档。
-
-### 2.1 新建文档
-
-```
-POST /documents
-```
-
-参数：
-
-| 参数       | 类型   | 说明     |
-| ---------- | ------ | -------- |
-| project_id | int    | 项目ID   |
-| title      | string | 文档标题 |
-| content    | string | 文档内容 |
-
-------
-
-### 2.2 获取文档列表
-
-```
-GET /documents
+```http
+GET /api/users/{userId}
 ```
 
-参数：
+Path 参数：`userId`（integer）
 
-| 参数       | 类型 | 说明     |
-| ---------- | ---- | -------- |
-| project_id | int  | 所属项目 |
+### 1.4 完全更新用户
 
-------
-
-### 2.3 删除文档
-
-```
-DELETE /documents/{document_id}
+```http
+PUT /api/users/{userId}
 ```
 
-删除指定文档。
+Path 参数：`userId`（integer）  
+Body：同创建用户
 
-------
+### 1.5 部分更新用户
 
-# 3 实体标注接口
-
-用于对古文中的实体进行标注。
-
-### 3.1 创建标注
-
-```
-POST /annotations
+```http
+PATCH /api/users/{userId}
 ```
 
-参数：
+Path 参数：`userId`（integer）  
+Body：`username`、`password`（可选）
 
-| 参数        | 类型   | 说明     |
-| ----------- | ------ | -------- |
-| document_id | int    | 文档ID   |
-| start_pos   | int    | 起始位置 |
-| end_pos     | int    | 结束位置 |
-| label       | string | 实体类型 |
+### 1.6 删除用户
 
-------
-
-### 3.2 获取标注
-
-```
-GET /annotations
+```http
+DELETE /api/users/{userId}
 ```
 
-参数：
+Path 参数：`userId`（integer）
 
-| 参数        | 类型 | 说明   |
-| ----------- | ---- | ------ |
-| document_id | int  | 文档ID |
+### 1.7 用户登录
 
-------
-
-### 3.3 删除标注
-
-```
-DELETE /annotations/{annotation_id}
+```http
+POST /api/users/login
 ```
 
-------
+Body 参数（JSON）：
 
-# 4 AI 功能接口
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| username | string | 是 | 用户名 |
+| password | string | 是 | 密码 |
 
-用于古文解析和问答功能。
+成功返回 `data` 字段包含：`id`、`username`、`token`
 
-### 4.1 古文解析
+---
 
-```
-POST /ai/analysis
-```
+## 2 Projects 项目接口
 
-参数：
+### 2.1 获取项目列表
 
-| 参数 | 类型   | 说明     |
-| ---- | ------ | -------- |
-| text | string | 古文内容 |
-
-------
-
-### 4.2 古文问答
-
-```
-POST /ai/qa
+```http
+GET /api/projects
 ```
 
-参数：
+Query 参数：
 
-| 参数     | 类型   | 说明       |
-| -------- | ------ | ---------- |
-| text     | string | 古文内容   |
-| question | string | 提出的问题 |
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| ownerId | integer | 否 | 按所有者过滤 |
 
-------
+### 2.2 创建项目
 
-# 5 自动分词接口
-
-### 5.1 文本分词
-
-```
-POST /ai/segment
+```http
+POST /api/projects
 ```
 
-参数：
+Body 参数（JSON）：
 
-| 参数 | 类型   | 说明     |
-| ---- | ------ | -------- |
-| text | string | 古文文本 |
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| name | string | 是 | 项目名称，最大 100 |
+| description | string | 否 | 项目描述 |
+| ownerId | integer | 是 | 所有者用户 ID |
 
-------
+### 2.3 获取项目详情
 
-# 6 数据导出接口
-
-### 6.1 导出数据
-
-```
-GET /export/{project_id}
+```http
+GET /api/projects/{projectId}
 ```
 
-导出指定项目的标注数据。
+Path 参数：`projectId`（integer）
+
+### 2.4 完全更新项目
+
+```http
+PUT /api/projects/{projectId}
+```
+
+Path 参数：`projectId`（integer）  
+Body：同创建项目
+
+### 2.5 部分更新项目
+
+```http
+PATCH /api/projects/{projectId}
+```
+
+Path 参数：`projectId`（integer）  
+Body：`name`、`description`、`ownerId`（可选）
+
+### 2.6 删除项目
+
+```http
+DELETE /api/projects/{projectId}
+```
+
+Path 参数：`projectId`（integer）
+
+---
+
+## 3 Documents 文档接口
+
+### 3.1 获取项目下文档列表
+
+```http
+GET /api/projects/{projectId}/documents
+```
+
+Path 参数：`projectId`（integer）
+
+### 3.2 在项目下创建文档
+
+```http
+POST /api/projects/{projectId}/documents
+```
+
+Path 参数：`projectId`（integer）
+
+Body 参数（JSON）：
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| title | string | 是 | 文档标题，最大 200 |
+| content | string | 是 | 文档内容 |
+
+### 3.3 全局搜索文档
+
+```http
+GET /api/documents
+```
+
+Query 参数：
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| projectId | integer | 否 | 按项目过滤 |
+| keyword | string | 否 | 标题/内容关键字 |
+
+### 3.4 获取文档详情
+
+```http
+GET /api/documents/{documentId}
+```
+
+Path 参数：`documentId`（integer）
+
+### 3.5 完整更新文档
+
+```http
+PUT /api/documents/{documentId}
+```
+
+Path 参数：`documentId`（integer）  
+Body：`title`、`content`（必填）
+
+### 3.6 部分更新文档
+
+```http
+PATCH /api/documents/{documentId}
+```
+
+Path 参数：`documentId`（integer）  
+Body：`title`、`content`（可选）
+
+### 3.7 删除文档
+
+```http
+DELETE /api/documents/{documentId}
+```
+
+Path 参数：`documentId`（integer）
+
+---
+
+## 4 Annotations 标注接口
+
+### 4.1 获取文档下标注列表
+
+```http
+GET /api/documents/{documentId}/annotations
+```
+
+Path 参数：`documentId`（integer）
+
+### 4.2 在文档下创建标注
+
+```http
+POST /api/documents/{documentId}/annotations
+```
+
+Path 参数：`documentId`（integer）
+
+Body 参数（JSON）：
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| entity | string | 是 | 实体内容，最大 100 |
+| entityType | string | 是 | 枚举：person/location/time/other |
+| startPos | integer | 是 | 起始位置 |
+| endPos | integer | 是 | 结束位置 |
+
+### 4.3 全局搜索标注
+
+```http
+GET /api/annotations
+```
+
+Query 参数：
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| projectId | integer | 否 | 按项目过滤 |
+| documentId | integer | 否 | 按文档过滤 |
+| entityType | string | 否 | 枚举：person/location/time/other |
+
+### 4.4 获取标注详情
+
+```http
+GET /api/annotations/{annotationId}
+```
+
+Path 参数：`annotationId`（integer）
+
+### 4.5 完整更新标注
+
+```http
+PUT /api/annotations/{annotationId}
+```
+
+Path 参数：`annotationId`（integer）  
+Body：`entity`、`entityType`、`startPos`、`endPos`（必填）
+
+### 4.6 部分更新标注
+
+```http
+PATCH /api/annotations/{annotationId}
+```
+
+Path 参数：`annotationId`（integer）  
+Body：`entity`、`entityType`、`startPos`、`endPos`（可选）
+
+### 4.7 删除标注
+
+```http
+DELETE /api/annotations/{annotationId}
+```
+
+Path 参数：`annotationId`（integer）
+
+---
+
+## 5 通用状态码
+
+| 状态码 | 含义 |
+| --- | --- |
+| 200 | 请求成功 |
+| 201 | 创建成功 |
+| 400 | 请求参数错误 |
+| 401 | 未认证或认证失败（登录接口） |
+| 404 | 资源不存在 |
+| 500 | 服务器内部错误 |
