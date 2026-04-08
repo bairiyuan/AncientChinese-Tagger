@@ -26,3 +26,4 @@
 对接后端接口（接口名称: getDocuments, deleteDocument, restoreDocument 等）
 处理加载状态和错误（loading 状态、error 提示、空数据处理）
 
+PR：https://github.com/bairiyuan/AncientChinese-Tagger/pull/19
