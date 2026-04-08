@@ -1,0 +1,139 @@
+/* 容器 */
+.container {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 var(--space-xl);
+}
+
+.container.sm {
+  max-width: 800px;
+}
+
+.container.md {
+  max-width: 1100px;
+}
+
+/* 页面布局 */
+.page {
+  min-height: 100vh;
+  padding-bottom: var(--space-2xl);
+}
+
+.page-header {
+  background: var(--white);
+  border-bottom: 1px solid var(--edge);
+  padding: var(--space-xl) 0;
+  margin-bottom: var(--space-xl);
+}
+
+.page-header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-lg);
+}
+
+.page-header h1 {
+  font-size: 36px;
+  margin-bottom: var(--space-xs);
+}
+
+.page-header p {
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+
+.page-content {
+  padding: 0 var(--space-xl);
+}
+
+/* 搜索框 */
+.search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-box .search-icon {
+  position: absolute;
+  left: 14px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.search-box .input {
+  padding-left: 42px;
+}
+
+/* 网格布局 */
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-lg);
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-lg);
+}
+
+.grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-lg);
+}
+
+/* 响应式 */
+@media (max-width: 1280px) {
+  .grid-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .container {
+    padding: 0 var(--space-lg);
+  }
+
+  .page-content {
+    padding: 0 var(--space-lg);
+  }
+
+  .page-header h1 {
+    font-size: 28px;
+  }
+
+  .page-header-content {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .grid-2,
+  .grid-3,
+  .grid-4 {
+    grid-template-columns: 1fr;
+  }
+
+  .toolbar,
+  .toolbar.split {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 640px) {
+  .container {
+    padding: 0 var(--space-md);
+  }
+
+  .page-content {
+    padding: 0 var(--space-md);
+  }
+}

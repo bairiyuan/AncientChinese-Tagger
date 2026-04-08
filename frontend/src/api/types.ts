@@ -9,7 +9,7 @@ export interface ListResult<T> {
   total: number
 }
 
-export type EntityType = 'person' | 'location' | 'time' | 'other'
+export type EntityType = 'person' | 'location' | 'time' | 'concept' | 'other'
 
 export interface User {
   id: number
@@ -49,6 +49,7 @@ export interface Project {
   ownerId: number
   createdAt: string
   updatedAt: string
+  deletedAt?: string
 }
 
 export interface ProjectCreate {
@@ -72,6 +73,7 @@ export interface Document {
   content: string | null
   createdAt: string
   updatedAt: string
+  deletedAt?: string
 }
 
 export interface DocumentCreate {
