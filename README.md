@@ -2,6 +2,8 @@
 
 汉语智能标注平台 - 古汉语文本处理与标注系统
 
+figma链接：https://www.figma.com/design/ihRPLQpRDVUGJyPdDE2xhA/AncientChinese?node-id=0-1&t=ZTJSgGmVLfg1Mtxp-1
+
 ## 团队成员
 
 | 姓名   | 学号       | 分工     |
