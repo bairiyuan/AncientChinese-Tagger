@@ -1,211 +1,179 @@
-import type {
-  User,
-  Project,
-  Document,
-  Annotation,
-  EntityType,
-  LoginResult
-} from '@/api/types'
+import { apiClient, ApiRequestError } from '@/api/http'
+import type { Annotation, Document, EntityType, LoginResult, Project, User } from '@/api/types'
 
-// 模拟延迟
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+const TOKEN_KEY = 'auth_token'
+const USER_KEY = 'auth_user'
 
-// 模拟数据存储
-class MockDataStore {
-  users: User[] = [
-    {
-      id: 1,
-      username: 'admin',
-      password: '123456',
-      createdAt: '2026-01-01T00:00:00Z',
-      updatedAt: '2026-01-01T00:00:00Z'
-    }
-  ]
-
-  projects: Project[] = [
-    {
-      id: 1,
-      name: '论语注释研究',
-      description: '对《论语》进行系统性的文本标注与研究',
-      ownerId: 1,
-      createdAt: '2026-01-10T00:00:00Z',
-      updatedAt: '2026-03-10T00:00:00Z'
-    },
-    {
-      id: 2,
-      name: '诗经古韵分析',
-      description: '《诗经》文本的韵律与语言特征分析',
-      ownerId: 1,
-      createdAt: '2026-01-12T00:00:00Z',
-      updatedAt: '2026-03-09T00:00:00Z'
-    },
-    {
-      id: 3,
-      name: '史记人物标注',
-      description: '《史记》中历史人物及地名的实体标注',
-      ownerId: 1,
-      createdAt: '2026-01-15T00:00:00Z',
-      updatedAt: '2026-03-08T00:00:00Z'
-    },
-    {
-      id: 4,
-      name: '唐诗宋词集',
-      description: '唐诗宋词作品的文本整理与分析',
-      ownerId: 1,
-      createdAt: '2026-01-18T00:00:00Z',
-      updatedAt: '2026-03-07T00:00:00Z'
-    }
-  ]
-
-  documents: Document[] = [
-    {
-      id: 1,
-      projectId: 1,
-      title: '学而篇',
-      content: '子曰："学而时习之，不亦说乎？有朋自远方来，不亦乐乎？人不知而不愠，不亦君子乎？"',
-      createdAt: '2026-01-15T00:00:00Z',
-      updatedAt: '2026-03-10T00:00:00Z'
-    },
-    {
-      id: 2,
-      projectId: 1,
-      title: '为政篇',
-      content: '子曰："为政以德，譬如北辰，居其所而众星共之。"',
-      createdAt: '2026-01-16T00:00:00Z',
-      updatedAt: '2026-03-09T00:00:00Z'
-    },
-    {
-      id: 3,
-      projectId: 1,
-      title: '八佾篇',
-      content: '孔子谓季氏："八佾舞于庭，是可忍也，孰不可忍也？"',
-      createdAt: '2026-01-17T00:00:00Z',
-      updatedAt: '2026-03-08T00:00:00Z'
-    },
-    {
-      id: 4,
-      projectId: 2,
-      title: '关雎',
-      content: '关关雎鸠，在河之洲。窈窕淑女，君子好逑。',
-      createdAt: '2026-01-20T00:00:00Z',
-      updatedAt: '2026-03-05T00:00:00Z'
-    },
-    {
-      id: 5,
-      projectId: 3,
-      title: '项羽本纪',
-      content: '项籍者，下相人也，字羽。初起时，年二十四。',
-      createdAt: '2026-02-01T00:00:00Z',
-      updatedAt: '2026-03-01T00:00:00Z'
-    }
-  ]
-
-  annotations: Annotation[] = [
-    {
-      id: 1,
-      documentId: 1,
-      entity: '孔子',
-      entityType: 'person',
-      startPos: 3,
-      endPos: 5,
-      createdAt: '2026-01-15T00:00:00Z',
-      updatedAt: '2026-01-15T00:00:00Z'
-    },
-    {
-      id: 2,
-      documentId: 1,
-      entity: '君子',
-      entityType: 'concept',
-      startPos: 45,
-      endPos: 47,
-      createdAt: '2026-01-15T00:00:00Z',
-      updatedAt: '2026-01-15T00:00:00Z'
-    }
-  ]
-
-  currentUser: User | null = null
-  token: string | null = null
+type ApiProject = {
+  id: number
+  name: string
+  description: string | null
+  ownerId: number
+  created_at: string
+  updated_at: string
 }
 
-export const mockStore = new MockDataStore()
+type ApiDocument = {
+  id: number
+  project_id: number
+  title: string | null
+  content: string | null
+  created_at: string
+  updated_at: string
+}
 
-// API 函数
+type ApiAnnotation = {
+  id: number
+  document_id: number
+  entity: string
+  entity_type: string
+  start_pos: number | null
+  end_pos: number | null
+  created_at: string
+  updated_at: string
+}
+
+type PagedResult<T> = {
+  items: T[]
+  total: number
+}
+
+type AuthUser = Pick<User, 'id' | 'username'>
+
+const normalizeEntityType = (type: string): EntityType =>
+  type === 'concept' ? 'other' : (type as EntityType)
+
+const toProject = (item: ApiProject): Project => ({
+  id: item.id,
+  name: item.name,
+  description: item.description,
+  ownerId: item.ownerId,
+  createdAt: item.created_at,
+  updatedAt: item.updated_at,
+})
+
+const toDocument = (item: ApiDocument): Document => ({
+  id: item.id,
+  projectId: item.project_id,
+  title: item.title,
+  content: item.content,
+  createdAt: item.created_at,
+  updatedAt: item.updated_at,
+})
+
+const toAnnotation = (item: ApiAnnotation): Annotation => ({
+  id: item.id,
+  documentId: item.document_id,
+  entity: item.entity,
+  entityType: normalizeEntityType(item.entity_type),
+  startPos: item.start_pos,
+  endPos: item.end_pos,
+  createdAt: item.created_at,
+  updatedAt: item.updated_at,
+})
+
+const getStoredUser = (): AuthUser | null => {
+  try {
+    const raw = localStorage.getItem(USER_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as AuthUser
+    if (typeof parsed?.id === 'number' && typeof parsed?.username === 'string') return parsed
+    return null
+  } catch {
+    return null
+  }
+}
+
+const authState: { user: AuthUser | null } = {
+  user: getStoredUser(),
+}
+
+const saveAuth = (token: string | null, user: AuthUser | null): void => {
+  if (token) localStorage.setItem(TOKEN_KEY, token)
+  else localStorage.removeItem(TOKEN_KEY)
+
+  if (user) localStorage.setItem(USER_KEY, JSON.stringify(user))
+  else localStorage.removeItem(USER_KEY)
+
+  authState.user = user
+}
+
+const toUser = (user: AuthUser): User => ({
+  id: user.id,
+  username: user.username,
+  password: '',
+  createdAt: '',
+  updatedAt: '',
+})
+
+const mapApiError = (error: unknown): Error => {
+  if (error instanceof ApiRequestError) return new Error(error.message || '请求失败')
+  if (error instanceof Error) return error
+  return new Error('请求失败')
+}
+
+export const mockStore = {
+  get token(): string | null {
+    return localStorage.getItem(TOKEN_KEY)
+  },
+  get currentUser(): User | null {
+    return authState.user ? toUser(authState.user) : null
+  },
+}
+
 export const mockApi = {
-  // 用户相关
   async login(username: string, password: string): Promise<LoginResult> {
-    await delay(500)
-    const user = mockStore.users.find(u => u.username === username && u.password === password)
-    if (!user) {
-      throw new Error('用户名或密码错误')
-    }
-    mockStore.currentUser = user
-    mockStore.token = `mock_token_${user.id}_${Date.now()}`
-    return {
-      id: user.id,
-      username: user.username,
-      token: mockStore.token
+    try {
+      const data = await apiClient.request<LoginResult>('/api/users/login', {
+        method: 'POST',
+        body: { username, password },
+      })
+      saveAuth(data.token, { id: data.id, username: data.username })
+      return data
+    } catch (error) {
+      throw mapApiError(error)
     }
   },
 
   async register(username: string, password: string): Promise<LoginResult> {
-    await delay(500)
-    const existingUser = mockStore.users.find(u => u.username === username)
-    if (existingUser) {
-      throw new Error('用户名已存在')
-    }
-    const newUser: User = {
-      id: mockStore.users.length + 1,
-      username,
-      password,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
-    mockStore.users.push(newUser)
-    mockStore.currentUser = newUser
-    mockStore.token = `mock_token_${newUser.id}_${Date.now()}`
-    return {
-      id: newUser.id,
-      username: newUser.username,
-      token: mockStore.token
+    try {
+      await apiClient.request('/api/users', {
+        method: 'POST',
+        body: { username, password },
+      })
+      return await this.login(username, password)
+    } catch (error) {
+      throw mapApiError(error)
     }
   },
 
   async logout(): Promise<void> {
-    await delay(200)
-    mockStore.currentUser = null
-    mockStore.token = null
+    saveAuth(null, null)
   },
 
   async updateUsername(newUsername: string): Promise<void> {
-    await delay(500)
-    if (!mockStore.currentUser) {
-      throw new Error('请先登录')
-    }
-    const currentId = mockStore.currentUser.id
-    const existing = mockStore.users.find(u => u.username === newUsername && u.id !== currentId)
-    if (existing) {
-      throw new Error('用户名已存在')
-    }
-    const index = mockStore.users.findIndex(u => u.id === currentId)
-    if (index !== -1) {
-      mockStore.users[index]!.username = newUsername
-      mockStore.currentUser.username = newUsername
+    if (!authState.user) throw new Error('请先登录')
+    try {
+      await apiClient.request(`/api/users/${authState.user.id}`, {
+        method: 'PATCH',
+        body: { username: newUsername },
+      })
+      saveAuth(mockStore.token, { ...authState.user, username: newUsername })
+    } catch (error) {
+      throw mapApiError(error)
     }
   },
 
   async updatePassword(currentPassword: string, newPassword: string): Promise<void> {
-    await delay(500)
-    if (!mockStore.currentUser) {
-      throw new Error('请先登录')
-    }
-    const user = mockStore.users.find(u => u.id === mockStore.currentUser!.id)
-    if (!user || user.password !== currentPassword) {
-      throw new Error('当前密码错误')
-    }
-    const index = mockStore.users.findIndex(u => u.id === mockStore.currentUser!.id)
-    if (index !== -1) {
-      mockStore.users[index]!.password = newPassword
-      mockStore.users[index]!.updatedAt = new Date().toISOString()
+    if (!authState.user) throw new Error('请先登录')
+    try {
+      await this.login(authState.user.username, currentPassword)
+      await apiClient.request(`/api/users/${authState.user.id}`, {
+        method: 'PATCH',
+        body: { password: newPassword },
+      })
+    } catch (error) {
+      throw mapApiError(error)
     }
   },
 
@@ -214,221 +182,157 @@ export const mockApi = {
   },
 
   isLoggedIn(): boolean {
-    return mockStore.currentUser !== null
+    return Boolean(mockStore.token && authState.user)
   },
 
-  // 项目相关
   async getProjects(): Promise<Project[]> {
-    await delay(300)
-    return [...mockStore.projects]
+    const data = await apiClient.request<PagedResult<ApiProject>>('/api/projects')
+    return data.items.map(toProject)
   },
 
   async getProject(id: number): Promise<Project | undefined> {
-    await delay(200)
-    return mockStore.projects.find(p => p.id === id)
+    const data = await apiClient.request<ApiProject>(`/api/projects/${id}`)
+    return data ? toProject(data) : undefined
   },
 
   async createProject(data: { name: string; description?: string }): Promise<Project> {
-    await delay(400)
-    const newProject: Project = {
-      id: Math.max(...mockStore.projects.map(p => p.id), 0) + 1,
-      name: data.name,
-      description: data.description || null,
-      ownerId: mockStore.currentUser?.id || 1,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
-    mockStore.projects.unshift(newProject)
-    return newProject
+    if (!authState.user) throw new Error('请先登录')
+    const created = await apiClient.request<ApiProject>('/api/projects', {
+      method: 'POST',
+      body: {
+        name: data.name,
+        description: data.description ?? '',
+        ownerId: authState.user.id,
+      },
+    })
+    return toProject(created)
   },
 
   async updateProject(id: number, data: Partial<Project>): Promise<Project> {
-    await delay(300)
-    const index = mockStore.projects.findIndex(p => p.id === id)
-    if (index === -1) throw new Error('项目不存在')
-    const existing = mockStore.projects[index]
+    const existing = await this.getProject(id)
     if (!existing) throw new Error('项目不存在')
-    const updated: Project = {
-      ...existing,
-      ...data,
-      id: existing.id,
-      updatedAt: new Date().toISOString()
-    }
-    mockStore.projects[index] = updated
-    return updated
+    const updated = await apiClient.request<ApiProject>(`/api/projects/${id}`, {
+      method: 'PATCH',
+      body: {
+        name: data.name ?? existing.name,
+        description: data.description ?? existing.description ?? '',
+        ownerId: data.ownerId ?? existing.ownerId,
+      },
+    })
+    return toProject(updated)
   },
 
   async deleteProject(id: number): Promise<void> {
-    await delay(300)
-    const index = mockStore.projects.findIndex(p => p.id === id)
-    if (index === -1) throw new Error('项目不存在')
-    mockStore.projects.splice(index, 1)
-    // 同时删除项目下的文档
-    mockStore.documents = mockStore.documents.filter(d => d.projectId !== id)
+    await apiClient.request(`/api/projects/${id}`, { method: 'DELETE' })
   },
 
-  // 文档相关
   async getDocuments(projectId: number): Promise<Document[]> {
-    await delay(300)
-    return mockStore.documents.filter(d => d.projectId === projectId)
+    const data = await apiClient.request<PagedResult<ApiDocument>>(`/api/projects/${projectId}/documents`)
+    return data.items.map(toDocument)
   },
 
   async getDocument(id: number): Promise<Document | undefined> {
-    await delay(200)
-    return mockStore.documents.find(d => d.id === id)
+    const data = await apiClient.request<ApiDocument>(`/api/documents/${id}`)
+    return data ? toDocument(data) : undefined
   },
 
   async createDocument(projectId: number, data: { title: string; content: string }): Promise<Document> {
-    await delay(400)
-    const newDoc: Document = {
-      id: Math.max(...mockStore.documents.map(d => d.id), 0) + 1,
-      projectId,
-      title: data.title,
-      content: data.content,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
-    mockStore.documents.push(newDoc)
-    return newDoc
+    const created = await apiClient.request<ApiDocument>(`/api/projects/${projectId}/documents`, {
+      method: 'POST',
+      body: data,
+    })
+    return toDocument(created)
   },
 
   async updateDocument(id: number, data: Partial<Document>): Promise<Document> {
-    await delay(300)
-    const index = mockStore.documents.findIndex(d => d.id === id)
-    if (index === -1) throw new Error('文档不存在')
-    const existing = mockStore.documents[index]
-    if (!existing) throw new Error('文档不存在')
-    const updated: Document = {
-      ...existing,
-      ...data,
-      id: existing.id,
-      updatedAt: new Date().toISOString()
-    }
-    mockStore.documents[index] = updated
-    return updated
+    const updated = await apiClient.request<ApiDocument>(`/api/documents/${id}`, {
+      method: 'PATCH',
+      body: {
+        title: data.title,
+        content: data.content,
+      },
+    })
+    return toDocument(updated)
   },
 
   async deleteDocument(id: number): Promise<void> {
-    await delay(300)
-    const index = mockStore.documents.findIndex(d => d.id === id)
-    if (index === -1) throw new Error('文档不存在')
-    mockStore.documents.splice(index, 1)
-    // 同时删除文档下的标注
-    mockStore.annotations = mockStore.annotations.filter(a => a.documentId !== id)
+    await apiClient.request(`/api/documents/${id}`, { method: 'DELETE' })
   },
 
-  // 标注相关
   async getAnnotations(documentId: number): Promise<Annotation[]> {
-    await delay(200)
-    return mockStore.annotations.filter(a => a.documentId === documentId)
+    const data = await apiClient.request<ApiAnnotation[]>(`/api/documents/${documentId}/annotations`)
+    return data.map(toAnnotation)
   },
 
-  async createAnnotation(documentId: number, data: {
-    entity: string
-    entityType: EntityType
-    startPos: number
-    endPos: number
-  }): Promise<Annotation> {
-    await delay(300)
-    const newAnnotation: Annotation = {
-      id: Math.max(...mockStore.annotations.map(a => a.id), 0) + 1,
-      documentId,
-      ...data,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
-    mockStore.annotations.push(newAnnotation)
-    return newAnnotation
+  async createAnnotation(
+    documentId: number,
+    data: { entity: string; entityType: EntityType; startPos: number; endPos: number },
+  ): Promise<Annotation> {
+    const created = await apiClient.request<ApiAnnotation>(`/api/documents/${documentId}/annotations`, {
+      method: 'POST',
+      body: {
+        entity: data.entity,
+        entity_type: data.entityType === 'concept' ? 'other' : data.entityType,
+        start_pos: data.startPos,
+        end_pos: data.endPos,
+      },
+    })
+    return toAnnotation(created)
   },
 
   async updateAnnotation(id: number, data: Partial<Annotation>): Promise<Annotation> {
-    await delay(200)
-    const index = mockStore.annotations.findIndex(a => a.id === id)
-    if (index === -1) throw new Error('标注不存在')
-    const existing = mockStore.annotations[index]
-    if (!existing) throw new Error('标注不存在')
-    const updated: Annotation = {
-      ...existing,
-      ...data,
-      id: existing.id,
-      updatedAt: new Date().toISOString()
-    }
-    mockStore.annotations[index] = updated
-    return updated
+    const updated = await apiClient.request<ApiAnnotation>(`/api/annotations/${id}`, {
+      method: 'PATCH',
+      body: {
+        entity: data.entity,
+        entity_type: data.entityType ? (data.entityType === 'concept' ? 'other' : data.entityType) : undefined,
+        start_pos: data.startPos,
+        end_pos: data.endPos,
+      },
+    })
+    return toAnnotation(updated)
   },
 
   async deleteAnnotation(id: number): Promise<void> {
-    await delay(200)
-    const index = mockStore.annotations.findIndex(a => a.id === id)
-    if (index === -1) throw new Error('标注不存在')
-    mockStore.annotations.splice(index, 1)
+    await apiClient.request(`/api/annotations/${id}`, { method: 'DELETE' })
   },
 
-  // AI 标注
   async autoAnnotate(documentId: number): Promise<Annotation[]> {
-    await delay(1500)
-    const document = mockStore.documents.find(d => d.id === documentId)
-    if (!document || !document.content) return []
+    const document = await this.getDocument(documentId)
+    if (!document?.content) return []
 
-    const newAnnotations: Annotation[] = []
-    const content = document.content
-
-    // 简单的关键词匹配
-    const patterns: { pattern: RegExp; type: EntityType }[] = [
-      { pattern: /子曰/g, type: 'person' },
-      { pattern: /孔子/g, type: 'person' },
-      { pattern: /君子/g, type: 'concept' },
-      { pattern: /诗/g, type: 'concept' },
+    const keywords: Array<{ word: string; type: EntityType }> = [
+      { word: '孔子', type: 'person' },
+      { word: '项羽', type: 'person' },
+      { word: '楚', type: 'location' },
+      { word: '年', type: 'time' },
+      { word: '君子', type: 'other' },
     ]
 
-    let currentId = Math.max(...mockStore.annotations.map(a => a.id), 0) + 1
-
-    patterns.forEach(({ pattern, type }) => {
-      let match
-      while ((match = pattern.exec(content)) !== null) {
-        const existing = mockStore.annotations.find(
-          a => a.documentId === documentId &&
-               a.startPos === match!.index &&
-               a.endPos === match!.index + match![0].length
-        )
-        if (!existing) {
-          const annotation: Annotation = {
-            id: currentId++,
-            documentId,
-            entity: match[0],
-            entityType: type,
-            startPos: match.index,
-            endPos: match.index + match[0].length,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          }
-          mockStore.annotations.push(annotation)
-          newAnnotations.push(annotation)
+    const created: Annotation[] = []
+    for (const item of keywords) {
+      const start = document.content.indexOf(item.word)
+      if (start >= 0) {
+        try {
+          const annotation = await this.createAnnotation(documentId, {
+            entity: item.word,
+            entityType: item.type,
+            startPos: start,
+            endPos: start + item.word.length,
+          })
+          created.push(annotation)
+        } catch {
+          // Ignore duplicate/conflict annotations during auto pass.
         }
       }
-    })
-
-    return newAnnotations
+    }
+    return created
   },
 
-  // AI 问答
   async askQuestion(question: string): Promise<string> {
-    await delay(2000)
-
-    if (question.includes('论语') || question.includes('学而')) {
-      return '这句话出自《论语·学而》篇首，是孔子关于学习的重要论述。"学而时习之"强调学习与实践的结合，"有朋自远方来"体现了儒家对友谊的重视，"人不知而不愠"则展示了君子应有的胸怀与修养。'
-    }
-
-    if (question.includes('诗经')) {
-      return '《诗经》是中国最早的诗歌总集，收录了从西周初年到春秋中叶（约前11世纪至前6世纪）的诗歌305篇。它分为"风"、"雅"、"颂"三部分，反映了当时的社会生活、情感世界和文化风貌。'
-    }
-
-    if (question.includes('翻译') || question.includes('现代')) {
-      return '这段古文的意思是：[AI自动翻译] 将古代汉语转化为现代白话文，帮助读者理解原文含义。'
-    }
-
-    return '感谢您的提问。根据古文智能分析系统，这段文字的主要含义是：[系统正在学习更多内容以提供更准确的回答]'
-  }
+    if (question.includes('翻译')) return '当前版本未接入问答模型，已连接真实后端 CRUD 接口。'
+    return '当前版本以真实后端接口联调为主，AI 问答暂使用占位回复。'
+  },
 }
 
 export default mockApi
