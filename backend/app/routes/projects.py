@@ -1,8 +1,17 @@
-from datetime import datetime, timezone
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+from app.services import projects_service
+
+try:
+    from app.database import get_db
+except ImportError:
+    def get_db():
+        raise RuntimeError("get_db 未配置，请在 app.database 中提供 SQLAlchemy Session 依赖")
+
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -25,22 +34,23 @@ class ProjectPatch(BaseModel):
     ownerId: Optional[int] = Field(None, ge=1)
 
 
-_projects: Dict[int, dict] = {}
-_next_id: int = 1
+def _to_api_project(item: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": item.get("id"),
+        "name": item.get("name"),
+        "description": item.get("description"),
+        "ownerId": item.get("owner_id"),
+        "created_at": item.get("created_at"),
+        "updated_at": item.get("updated_at"),
+    }
 
 
-def _get_next_id() -> int:
-    global _next_id
-    current = _next_id
-    _next_id += 1
-    return current
-
-
-def _find_project_or_404(project_id: int) -> dict:
-    project = _projects.get(project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="项目不存在")
-    return project
+def _success(code: int, message: str, data: Any) -> Dict[str, Any]:
+    return {
+        "code": code,
+        "message": message,
+        "data": data,
+    }
 
 
 @router.get("")
@@ -48,85 +58,89 @@ async def list_projects(
     ownerId: Optional[int] = Query(None, ge=1, description="按所有者过滤"),
     page: int = Query(1, ge=1, description="页码"),
     pageSize: int = Query(10, ge=1, le=100, description="每页数量"),
+    db: Session = Depends(get_db),
 ):
-    projects = list(_projects.values())
+    result = projects_service.list_projects(db=db, owner_id=ownerId)
+    items = [_to_api_project(item) for item in result.get("data", [])]
 
-    if ownerId is not None:
-        projects = [project for project in projects if project["ownerId"] == ownerId]
-
-    total = len(projects)
+    total = len(items)
     start = (page - 1) * pageSize
     end = start + pageSize
-    items = projects[start:end]
 
-    return {
-        "code": 0,
-        "message": "success",
-        "data": {
-            "items": items,
+    return _success(
+        code=result.get("code", 0),
+        message=result.get("message", "success"),
+        data={
+            "items": items[start:end],
             "total": total,
             "page": page,
             "pageSize": pageSize,
         },
-    }
+    )
 
 
 @router.post("", status_code=201)
-async def create_project(body: ProjectCreate):
-    project_id = _get_next_id()
-    now = datetime.now(timezone.utc).isoformat()
-
-    project = {
-        "id": project_id,
-        "name": body.name,
-        "description": body.description,
-        "ownerId": body.ownerId,
-        "createdAt": now,
-        "updatedAt": now,
-    }
-
-    _projects[project_id] = project
-    return {"code": 0, "message": "success", "data": project}
+async def create_project(body: ProjectCreate, db: Session = Depends(get_db)):
+    result = projects_service.create_project(
+        db=db,
+        name=body.name,
+        description=body.description,
+        owner_id=body.ownerId,
+    )
+    return _success(
+        code=result.get("code", 0),
+        message=result.get("message", "success"),
+        data=_to_api_project(result.get("data")) if result.get("data") else None,
+    )
 
 
 @router.get("/{projectId}")
-async def get_project(projectId: int):
-    project = _find_project_or_404(projectId)
-    return {"code": 0, "message": "success", "data": project}
+async def get_project(projectId: int, db: Session = Depends(get_db)):
+    result = projects_service.get_project_by_id(db=db, project_id=projectId)
+    return _success(
+        code=result.get("code", 0),
+        message=result.get("message", "success"),
+        data=_to_api_project(result.get("data")) if result.get("data") else None,
+    )
 
 
 @router.put("/{projectId}")
-async def update_project(projectId: int, body: ProjectUpdate):
-    project = _find_project_or_404(projectId)
-
-    project["name"] = body.name
-    project["description"] = body.description
-    project["ownerId"] = body.ownerId
-    project["updatedAt"] = datetime.now(timezone.utc).isoformat()
-
-    return {"code": 0, "message": "success", "data": project}
+async def update_project(projectId: int, body: ProjectUpdate, db: Session = Depends(get_db)):
+    result = projects_service.update_project(
+        db=db,
+        project_id=projectId,
+        name=body.name,
+        description=body.description,
+        owner_id=body.ownerId,
+    )
+    return _success(
+        code=result.get("code", 0),
+        message=result.get("message", "success"),
+        data=_to_api_project(result.get("data")) if result.get("data") else None,
+    )
 
 
 @router.patch("/{projectId}")
-async def patch_project(projectId: int, body: ProjectPatch):
-    project = _find_project_or_404(projectId)
-
-    if body.name is None and body.description is None and body.ownerId is None:
-        raise HTTPException(status_code=400, detail="至少提供一个可更新字段")
-
-    if body.name is not None:
-        project["name"] = body.name
-    if body.description is not None:
-        project["description"] = body.description
-    if body.ownerId is not None:
-        project["ownerId"] = body.ownerId
-
-    project["updatedAt"] = datetime.now(timezone.utc).isoformat()
-    return {"code": 0, "message": "success", "data": project}
+async def patch_project(projectId: int, body: ProjectPatch, db: Session = Depends(get_db)):
+    result = projects_service.patch_project(
+        db=db,
+        project_id=projectId,
+        name=body.name,
+        description=body.description,
+        owner_id=body.ownerId,
+    )
+    return _success(
+        code=result.get("code", 0),
+        message=result.get("message", "success"),
+        data=_to_api_project(result.get("data")) if result.get("data") else None,
+    )
 
 
 @router.delete("/{projectId}")
-async def delete_project(projectId: int):
-    _find_project_or_404(projectId)
-    del _projects[projectId]
-    return {"code": 0, "message": "success", "data": None}
+async def delete_project(projectId: int, db: Session = Depends(get_db)):
+    result = projects_service.delete_project(db=db, project_id=projectId)
+    return _success(
+        code=result.get("code", 0),
+        message=result.get("message", "success"),
+        data=result.get("data"),
+    )

@@ -1,8 +1,22 @@
-from datetime import datetime, timezone
-from typing import Dict, Optional
+from pathlib import Path
+from tempfile import NamedTemporaryFile
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+from app.services import annotations_service, documents_service
+from app.services.xunzi_service import call_xunzi_model
+from app.utils.document_utils import export_document_with_annotations, import_document
+
+try:
+    from app.database import get_db
+except ImportError:
+    def get_db():
+        raise RuntimeError("get_db 未配置，请在 app.database 中提供 SQLAlchemy Session 依赖")
+
 
 router = APIRouter(tags=["documents"])
 
@@ -22,141 +36,191 @@ class DocumentPatch(BaseModel):
     content: Optional[str] = Field(None, min_length=1)
 
 
-_documents: Dict[int, dict] = {}
-_next_id: int = 1
+class XunziGenerateRequest(BaseModel):
+    text: str = Field(..., min_length=1)
 
 
-def _get_next_id() -> int:
-    global _next_id
-    current = _next_id
-    _next_id += 1
-    return current
-
-
-def _find_document_or_404(document_id: int) -> dict:
-    document = _documents.get(document_id)
-    if not document:
-        raise HTTPException(status_code=404, detail="文档不存在")
-    return document
-
-
-@router.get("/api/projects/{projectId}/documents")
-async def list_documents_by_project(
-    projectId: int,
-    page: int = Query(1, ge=1, description="页码"),
-    pageSize: int = Query(10, ge=1, le=100, description="每页数量"),
-):
-    filtered = [doc for doc in _documents.values() if doc["projectId"] == projectId]
-    total = len(filtered)
-    start = (page - 1) * pageSize
-    end = start + pageSize
-    items = filtered[start:end]
-
+def _success(code: int, message: str, data: Any) -> Dict[str, Any]:
     return {
-        "code": 0,
-        "message": "success",
-        "data": {
-            "items": items,
+        "code": code,
+        "message": message,
+        "data": data,
+    }
+
+
+def _annotation_to_api(item: dict) -> dict:
+    return {
+        "entity": item.get("entity"),
+        "entityType": item.get("entity_type", item.get("entityType")),
+        "startPos": item.get("start_pos", item.get("startPos")),
+        "endPos": item.get("end_pos", item.get("endPos")),
+    }
+
+
+@router.get("/api/projects/{project_id}/documents")
+async def list_documents_by_project(
+    project_id: int,
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(10, ge=1, le=100, description="每页数量"),
+    db: Session = Depends(get_db),
+):
+    result = documents_service.list_documents_by_project(db=db, project_id=project_id)
+    items = result.get("data", [])
+
+    total = len(items)
+    start = (page - 1) * page_size
+    end = start + page_size
+
+    return _success(
+        code=result.get("code", 0),
+        message=result.get("message", "success"),
+        data={
+            "items": items[start:end],
             "total": total,
             "page": page,
-            "pageSize": pageSize,
+            "page_size": page_size,
         },
-    }
+    )
 
 
-@router.post("/api/projects/{projectId}/documents", status_code=201)
-async def create_document_in_project(projectId: int, body: DocumentCreate):
-    document_id = _get_next_id()
-    now = datetime.now(timezone.utc).isoformat()
-
-    document = {
-        "id": document_id,
-        "projectId": projectId,
-        "title": body.title,
-        "content": body.content,
-        "createdAt": now,
-        "updatedAt": now,
-    }
-    _documents[document_id] = document
-
-    return {
-        "code": 0,
-        "message": "success",
-        "data": document,
-    }
+@router.post("/api/projects/{project_id}/documents", status_code=201)
+async def create_document_in_project(project_id: int, body: DocumentCreate, db: Session = Depends(get_db)):
+    result = documents_service.create_document(
+        db=db,
+        project_id=project_id,
+        title=body.title,
+        content=body.content,
+    )
+    return _success(result.get("code", 0), result.get("message", "success"), result.get("data"))
 
 
 @router.get("/api/documents")
 async def list_documents(
-    projectId: Optional[int] = Query(None, ge=1, description="按项目过滤"),
+    project_id: Optional[int] = Query(None, ge=1, description="按项目过滤"),
     keyword: Optional[str] = Query(None, description="按标题或内容关键字模糊搜索"),
     page: int = Query(1, ge=1, description="页码"),
-    pageSize: int = Query(10, ge=1, le=100, description="每页数量"),
+    page_size: int = Query(10, ge=1, le=100, description="每页数量"),
+    db: Session = Depends(get_db),
 ):
-    docs = list(_documents.values())
+    result = documents_service.search_documents(db=db, project_id=project_id, keyword=keyword)
+    items = result.get("data", [])
 
-    if projectId is not None:
-        docs = [doc for doc in docs if doc["projectId"] == projectId]
+    total = len(items)
+    start = (page - 1) * page_size
+    end = start + page_size
 
-    if keyword:
-        keyword_lower = keyword.lower()
-        docs = [
-            doc
-            for doc in docs
-            if keyword_lower in doc["title"].lower() or keyword_lower in doc["content"].lower()
-        ]
-
-    total = len(docs)
-    start = (page - 1) * pageSize
-    end = start + pageSize
-    items = docs[start:end]
-
-    return {
-        "code": 0,
-        "message": "success",
-        "data": {
-            "items": items,
+    return _success(
+        code=result.get("code", 0),
+        message=result.get("message", "success"),
+        data={
+            "items": items[start:end],
             "total": total,
             "page": page,
-            "pageSize": pageSize,
+            "page_size": page_size,
         },
-    }
+    )
 
 
-@router.get("/api/documents/{documentId}")
-async def get_document(documentId: int):
-    document = _find_document_or_404(documentId)
-    return {"code": 0, "message": "success", "data": document}
+@router.post("/api/projects/{project_id}/documents/import", status_code=201)
+async def import_document_api(project_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    filename = file.filename or ""
+    if not filename.lower().endswith(".txt"):
+        raise HTTPException(status_code=400, detail="仅支持 txt 文件导入")
+
+    suffix = Path(filename).suffix or ".txt"
+    temp_path: Optional[str] = None
+
+    try:
+        with NamedTemporaryFile(delete=False, suffix=suffix) as temp:
+            temp.write(await file.read())
+            temp_path = temp.name
+
+        imported = import_document(temp_path)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except UnicodeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        if temp_path:
+            try:
+                Path(temp_path).unlink(missing_ok=True)
+            except Exception:
+                pass
+
+    result = documents_service.create_document(
+        db=db,
+        project_id=project_id,
+        title=imported["title"],
+        content=imported["content"],
+    )
+    data = result.get("data") or {}
+    data.setdefault("annotations", [])
+    return _success(result.get("code", 0), result.get("message", "success"), data)
 
 
-@router.put("/api/documents/{documentId}")
-async def update_document(documentId: int, body: DocumentUpdate):
-    document = _find_document_or_404(documentId)
-    document["title"] = body.title
-    document["content"] = body.content
-    document["updatedAt"] = datetime.now(timezone.utc).isoformat()
+@router.get("/api/documents/{document_id}/export")
+async def export_document_api(document_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    doc_result = documents_service.get_document_by_id(db=db, document_id=document_id)
+    document = doc_result.get("data")
 
-    return {"code": 0, "message": "success", "data": document}
+    anno_result = annotations_service.search_annotations(db=db, document_id=document_id)
+    annotations: List[dict] = [
+        _annotation_to_api(item) for item in anno_result.get("data", []) if isinstance(item, dict)
+    ]
+
+    with NamedTemporaryFile(delete=False, suffix=".json") as temp:
+        temp_path = temp.name
+
+    export_document_with_annotations(document, annotations, temp_path, format="json")
+
+    filename = f"{document['title']}.json"
+    background_tasks.add_task(Path(temp_path).unlink, missing_ok=True)
+
+    return FileResponse(
+        path=temp_path,
+        media_type="application/json",
+        filename=filename,
+        background=background_tasks,
+    )
 
 
-@router.patch("/api/documents/{documentId}")
-async def patch_document(documentId: int, body: DocumentPatch):
-    document = _find_document_or_404(documentId)
-
-    if body.title is None and body.content is None:
-        raise HTTPException(status_code=400, detail="至少提供一个可更新字段")
-
-    if body.title is not None:
-        document["title"] = body.title
-    if body.content is not None:
-        document["content"] = body.content
-
-    document["updatedAt"] = datetime.now(timezone.utc).isoformat()
-    return {"code": 0, "message": "success", "data": document}
+@router.post("/api/documents/xunzi/generate")
+async def generate_with_xunzi(body: XunziGenerateRequest):
+    result = call_xunzi_model(body.text)
+    return _success(0, "success", {"result": result})
 
 
-@router.delete("/api/documents/{documentId}")
-async def delete_document(documentId: int):
-    _find_document_or_404(documentId)
-    del _documents[documentId]
-    return {"code": 0, "message": "success", "data": None}
+@router.get("/api/documents/{document_id}")
+async def get_document(document_id: int, db: Session = Depends(get_db)):
+    result = documents_service.get_document_by_id(db=db, document_id=document_id)
+    return _success(result.get("code", 0), result.get("message", "success"), result.get("data"))
+
+
+@router.put("/api/documents/{document_id}")
+async def update_document(document_id: int, body: DocumentUpdate, db: Session = Depends(get_db)):
+    result = documents_service.update_document(
+        db=db,
+        document_id=document_id,
+        title=body.title,
+        content=body.content,
+    )
+    return _success(result.get("code", 0), result.get("message", "success"), result.get("data"))
+
+
+@router.patch("/api/documents/{document_id}")
+async def patch_document(document_id: int, body: DocumentPatch, db: Session = Depends(get_db)):
+    result = documents_service.patch_document(
+        db=db,
+        document_id=document_id,
+        title=body.title,
+        content=body.content,
+    )
+    return _success(result.get("code", 0), result.get("message", "success"), result.get("data"))
+
+
+@router.delete("/api/documents/{document_id}")
+async def delete_document(document_id: int, db: Session = Depends(get_db)):
+    result = documents_service.delete_document(db=db, document_id=document_id)
+    return _success(result.get("code", 0), result.get("message", "success"), result.get("data"))
