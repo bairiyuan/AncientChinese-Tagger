@@ -241,9 +241,15 @@ export const mockApi = {
     return data.items.map(toDocument)
   },
 
-  async getDocument(id: number): Promise<Document | undefined> {
-    const data = await apiClient.request<ApiDocument>(`/api/documents/${id}`)
-    return data ? toDocument(data) : undefined
+  async getDocument(documentId: number): Promise<Document | undefined> {
+    const data = await apiClient.request<ApiDocument>(`/api/documents/${documentId}`)
+    if (!data) return undefined
+    const doc = toDocument(data)
+    // 确保从后端返回的标注字段正确映射
+    if ((data as any).annotations) {
+      (doc as any).annotations = (data as any).annotations.map(toAnnotation)
+    }
+    return doc
   },
 
   async createDocument(projectId: number, data: { title: string; content: string }): Promise<Document> {
