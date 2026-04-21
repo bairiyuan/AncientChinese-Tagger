@@ -128,6 +128,29 @@ async def create_annotation_in_document(
     return _normalize_service_response(result)
 
 
+@router.post("/api/documents/{document_id}/annotations/bulk", status_code=201)
+async def create_annotations_bulk(
+    document_id: int,
+    body: List[AnnotationCreate],
+    db: Session = Depends(get_db),
+):
+    annotations_data = [
+        {
+            "entity": item.entity,
+            "entity_type": item.entity_type.value,
+            "start_pos": item.start_pos,
+            "end_pos": item.end_pos,
+        }
+        for item in body
+    ]
+    result = annotations_service.create_annotations_bulk(
+        db=db,
+        document_id=document_id,
+        annotations_data=annotations_data,
+    )
+    return _normalize_service_response(result)
+
+
 @router.get("/api/annotations")
 async def list_annotations(
     project_id: Optional[int] = Query(None, ge=1),

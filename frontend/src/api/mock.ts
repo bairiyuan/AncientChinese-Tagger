@@ -11,6 +11,9 @@ type ApiProject = {
   ownerId: number
   created_at: string
   updated_at: string
+  documentsCount?: number
+  annotationsCount?: number
+  entityDistribution?: Record<string, number>
 }
 
 type ApiDocument = {
@@ -38,7 +41,7 @@ type PagedResult<T> = {
   total: number
 }
 
-type AuthUser = Pick<User, 'id' | 'username'>
+type AuthUser = Pick<User, 'id' | 'username' | 'createdAt'>
 
 const normalizeEntityType = (type: string): EntityType =>
   type === 'concept' ? 'other' : (type as EntityType)
@@ -50,6 +53,9 @@ const toProject = (item: ApiProject): Project => ({
   ownerId: item.ownerId,
   createdAt: item.created_at,
   updatedAt: item.updated_at,
+  documentsCount: item.documentsCount || 0,
+  annotationsCount: item.annotationsCount || 0,
+  entityDistribution: item.entityDistribution || {},
 })
 
 const toDocument = (item: ApiDocument): Document => ({
@@ -102,7 +108,7 @@ const toUser = (user: AuthUser): User => ({
   id: user.id,
   username: user.username,
   password: '',
-  createdAt: '',
+  createdAt: user.createdAt,
   updatedAt: '',
 })
 
@@ -128,7 +134,11 @@ export const mockApi = {
         method: 'POST',
         body: { username, password },
       })
-      saveAuth(data.token, { id: data.id, username: data.username })
+      saveAuth(data.token, {
+        id: data.id,
+        username: data.username,
+        createdAt: data.created_at,
+      })
       return data
     } catch (error) {
       throw mapApiError(error)
@@ -231,9 +241,15 @@ export const mockApi = {
     return data.items.map(toDocument)
   },
 
-  async getDocument(id: number): Promise<Document | undefined> {
-    const data = await apiClient.request<ApiDocument>(`/api/documents/${id}`)
-    return data ? toDocument(data) : undefined
+  async getDocument(documentId: number): Promise<Document | undefined> {
+    const data = await apiClient.request<ApiDocument>(`/api/documents/${documentId}`)
+    if (!data) return undefined
+    const doc = toDocument(data)
+    // 确保从后端返回的标注字段正确映射
+    if ((data as any).annotations) {
+      (doc as any).annotations = (data as any).annotations.map(toAnnotation)
+    }
+    return doc
   },
 
   async createDocument(projectId: number, data: { title: string; content: string }): Promise<Document> {
@@ -278,6 +294,23 @@ export const mockApi = {
       },
     })
     return toAnnotation(created)
+  },
+
+  async createAnnotationsBulk(
+    documentId: number,
+    data: Array<{ entity: string; entityType: EntityType; startPos: number; endPos: number }>,
+  ): Promise<Annotation[]> {
+    const payload = data.map(item => ({
+      entity: item.entity,
+      entity_type: item.entityType === 'concept' ? 'other' : item.entityType,
+      start_pos: item.startPos,
+      end_pos: item.endPos,
+    }))
+    const created = await apiClient.request<ApiAnnotation[]>(`/api/documents/${documentId}/annotations/bulk`, {
+      method: 'POST',
+      body: payload,
+    })
+    return created.map(toAnnotation)
   },
 
   async updateAnnotation(id: number, data: Partial<Annotation>): Promise<Annotation> {
