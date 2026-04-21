@@ -17,6 +17,8 @@ export interface User {
   password: string
   createdAt: string
   updatedAt: string
+  created_at?: string
+  updated_at?: string
 }
 
 export interface UserCreate {
@@ -40,6 +42,7 @@ export interface LoginResult {
   id: number
   username: string
   token: string
+  created_at: string
 }
 
 export interface Project {
@@ -50,6 +53,9 @@ export interface Project {
   createdAt: string
   updatedAt: string
   deletedAt?: string
+  documentsCount?: number
+  annotationsCount?: number
+  entityDistribution?: Record<string, number>
 }
 
 export interface ProjectCreate {

@@ -25,6 +25,13 @@ export function createAnnotationInDocument(documentId: number, payload: Annotati
   })
 }
 
+export function createAnnotationsBulk(documentId: number, payload: AnnotationCreate[]): Promise<Annotation[]> {
+  return apiClient.request<Annotation[]>(`/api/documents/${documentId}/annotations/bulk`, {
+    method: 'POST',
+    body: payload,
+  })
+}
+
 // 全局标注查询接口，支持多条件过滤。
 export function listAnnotations(params: ListAnnotationsParams = {}): Promise<Annotation[]> {
   return apiClient.request<Annotation[]>('/api/annotations', {

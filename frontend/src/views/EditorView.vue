@@ -206,10 +206,36 @@ const addAnnotationAtPosition = async (start: number, end: number) => {
       endPos: end
     })
     annotations.value.push(newAnnotation)
+    // 如果只有一处匹配，添加后直接清除
+    if (matchPositions.value.length === 1) {
+      newAnnotationText.value = ''
+      matchPositions.value = []
+    } else {
+      // 否则只移除当前匹配项
+      matchPositions.value = matchPositions.value.filter(p => p.start !== start)
+    }
+  } catch (error) {
+    console.error('添加标注失败:', error)
+  }
+}
+
+const confirmAddAnnotations = async () => {
+  const text = newAnnotationText.value.trim()
+  if (!text || matchPositions.value.length === 0) return
+
+  try {
+    const newAnnotations = await mockApi.createAnnotationsBulk(documentId.value, matchPositions.value.map(pos => ({
+      entity: text,
+      entityType: selectedEntityType.value as EntityType,
+      startPos: pos.start,
+      endPos: pos.end
+    })))
+    annotations.value = [...annotations.value, ...newAnnotations]
     newAnnotationText.value = ''
     matchPositions.value = []
   } catch (error) {
-    console.error('添加标注失败:', error)
+    console.error('批量添加标注失败:', error)
+    alert('批量添加失败')
   }
 }
 
@@ -562,9 +588,15 @@ onMounted(() => {
                       第 {{ idx + 1 }} 处：位置 {{ pos.start }}-{{ pos.end }}
                     </button>
                   </div>
+                  <button class="btn primary full mt-10" @click="confirmAddAnnotations">
+                    确认添加全部
+                  </button>
+                  <button class="btn ghost full mt-5" @click="matchPositions = []">
+                    取消
+                  </button>
                 </div>
 
-                <button class="btn primary full" @click="handleAddAnnotation">
+                <button v-else class="btn primary full" @click="handleAddAnnotation">
                   查找匹配
                 </button>
               </div>
@@ -1064,6 +1096,18 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.mt-10 {
+  margin-top: 10px;
+}
+
+.mt-5 {
+  margin-top: 5px;
+}
+
+.full {
+  width: 100%;
 }
 
 .btn.small {
