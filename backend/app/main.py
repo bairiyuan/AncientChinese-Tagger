@@ -6,6 +6,7 @@ from .routes.annotations import router as annotations_router
 from .routes.documents import router as documents_router
 from .routes.projects import router as projects_router
 from .routes.users import router as users_router
+from .routes.ai import router as ai_router
 
 
 app = FastAPI(title="AncientChinese Backend")
@@ -39,3 +40,4 @@ app.include_router(projects_router)
 app.include_router(documents_router)
 app.include_router(annotations_router)
 app.include_router(users_router)
+app.include_router(ai_router)

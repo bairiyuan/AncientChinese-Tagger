@@ -2,7 +2,11 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { mockApi } from '@/api/mock'
+import { aiApi } from '@/api'
 import type { Document, Annotation, EntityType } from '@/api/types'
+import MarkdownIt from 'markdown-it'
+
+const md = new MarkdownIt()
 
 const router = useRouter()
 const route = useRoute()
@@ -17,6 +21,9 @@ const documentId = computed(() => Number(route.params.documentId))
 
 const document = ref<Document | null>(null)
 const annotations = ref<Annotation[]>([])
+const sortedAnnotations = computed(() => {
+  return [...annotations.value].sort((a, b) => (a.start_pos || 0) - (b.start_pos || 0))
+})
 const isLoading = ref(true)
 const activeTab = ref('annotation')
 const isAnnotating = ref(false)
@@ -134,12 +141,16 @@ const addEntityTypeInline = () => {
 const loadData = async () => {
   isLoading.value = true
   try {
-    const [docData, annData] = await Promise.all([
-      mockApi.getDocument(documentId.value),
-      mockApi.getAnnotations(documentId.value)
-    ])
-    document.value = docData || null
-    annotations.value = annData
+    const data = await mockApi.getDocument(documentId.value)
+    if (data) {
+      document.value = data
+      // 如果后端返回的数据中包含标注，则使用后端的数据
+      if ((data as any).annotations) {
+        annotations.value = (data as any).annotations
+      } else {
+        annotations.value = await mockApi.getAnnotations(documentId.value)
+      }
+    }
   } catch (error) {
     console.error('加载数据失败:', error)
   } finally {
@@ -148,12 +159,41 @@ const loadData = async () => {
 }
 
 const handleAutoAnnotate = async () => {
+  if (!document.value?.content) return
   isAnnotating.value = true
   try {
-    const newAnnotations = await mockApi.autoAnnotate(documentId.value)
-    annotations.value = [...annotations.value, ...newAnnotations]
+    const suggestions = await aiApi.autoAnnotate(document.value.content)
+    const newAnns: Annotation[] = []
+    
+    for (const item of suggestions) {
+      const text = item.entity
+      const content = document.value.content
+      let start = content.indexOf(text)
+      
+      if (start !== -1) {
+        try {
+          const ann = await mockApi.createAnnotation(documentId.value, {
+            entity: text,
+            entityType: (item.entity_type as EntityType) || 'other',
+            startPos: start,
+            endPos: start + text.length
+          })
+          newAnns.push(ann)
+        } catch (e) {
+          // 跳过已存在的
+        }
+      }
+    }
+    
+    if (newAnns.length > 0) {
+      annotations.value = [...annotations.value, ...newAnns]
+      alert(`AI 自动标注完成，新增 ${newAnns.length} 条标注`)
+    } else {
+      alert('AI 未能识别出新的实体')
+    }
   } catch (error) {
     console.error('自动标注失败:', error)
+    alert('AI 自动标注失败')
   } finally {
     isAnnotating.value = false
   }
@@ -252,32 +292,34 @@ const handleDeleteAnnotation = async (id: number) => {
 
 const askAiQuestion = async () => {
   const q = question.value.trim()
-  if (!q) return
+  if (!q || !document.value) return
 
   aiMessages.value.push({ type: 'user', text: q })
   question.value = ''
   isAiLoading.value = true
 
   try {
-    // 模拟AI回答（后端实现后将调用真实API）
-    const docContent = document.value?.content || ''
-    const docTitle = document.value?.title || ''
-
-    await new Promise(resolve => setTimeout(resolve, 1500))
-
-    let answer = ''
-    if (q.includes('翻译') || q.includes('现代汉语')) {
-      answer = `根据文档"${docTitle}"的内容，古文翻译如下：\n\n这是一段具有深厚文化底蕴的古文翻译。现代汉语的表述方式使得原文的含义更加清晰易懂。翻译过程中需要注重词义的准确性以及语境的整体把握。`
-    } else if (q.includes('人名') || q.includes('地名')) {
-      answer = `通过对文档"${docTitle}"的分析，我识别出以下实体：\n\n**人物**：文中涉及的历史人物需要进行标注\n**地名**：文中提到的地名可结合地理信息进行考证\n\n建议使用实体标注功能进行系统梳理。`
-    } else if (q.includes('词汇') || q.includes('解释') || q.includes('重点')) {
-      answer = `文档"${docTitle}"中的重点词汇解释：\n\n1. **重点词1**：该词在古代文献中使用频率较高，具有多重含义\n2. **重点词2**：这是理解整篇古文的关键所在\n3. **重点词3**：体现了当时的语言习惯和文化背景\n\n如需更详细的解释，请指定具体词汇。`
-    } else {
-      answer = `关于文档"${docTitle}"，我来为您分析：\n\n${docContent ? '文档内容涵盖了重要的历史文化信息...' : '当前文档暂无内容，请先添加古文文本。'}\n\n如果您有关于文档内容的具体问题，欢迎继续提问。`
-    }
+    const history = aiMessages.value.slice(0, -1).map(m => ({
+      role: m.type === 'user' ? 'user' : 'assistant',
+      content: m.text
+    }))
+    
+    const answer = await aiApi.aiChat({
+      text: document.value.content || '',
+      question: q,
+      history
+    })
 
     aiMessages.value.push({ type: 'ai', text: answer })
+    // 自动滚动到底部 (侧边栏)
+    nextTick(() => {
+      const sidebar = document.querySelector('.editor-sidebar')
+      if (sidebar) {
+        sidebar.scrollTop = sidebar.scrollHeight
+      }
+    })
   } catch (error) {
+    console.error('AI Q&A failed:', error)
     aiMessages.value.push({ type: 'ai', text: '抱歉，AI助手暂时无法回答这个问题，请稍后再试。' })
   } finally {
     isAiLoading.value = false
@@ -293,17 +335,11 @@ const handleParsing = async () => {
   isParsing.value = true
 
   try {
-    // 模拟AI解析（后端实现后将调用真实API）
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    const content = document.value.content
-
-    parsedResult.value = {
-      sentence: '根据古文特点进行智能断句，将原文划分为若干语义完整的句子单元。',
-      grammar: '本文采用主谓宾基本句式，夹杂状语后置和定语后置等古汉语特殊语法现象。',
-      meaning: '通过对文本的深入分析，揭示其蕴含的历史背景、文化内涵和思想价值。'
-    }
+    const result = await aiApi.analyzeText(document.value.content)
+    parsedResult.value = result
   } catch (error) {
     console.error('解析失败:', error)
+    alert('AI解析失败，请检查网络或稍后再试')
   } finally {
     isParsing.value = false
   }
@@ -316,30 +352,34 @@ const askParsingQuestionWith = (q: string) => {
 
 const askParsingQuestion = async () => {
   const q = parsingQuestion.value.trim()
-  if (!q) return
+  if (!q || !document.value) return
 
   parsingMessages.value.push({ type: 'user', text: q })
   parsingQuestion.value = ''
   isParsingLoading.value = true
 
   try {
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    const history = parsingMessages.value.slice(0, -1).map(m => ({
+      role: m.type === 'user' ? 'user' : 'assistant',
+      content: m.text
+    }))
 
-    let answer = ''
-    if (q.includes('语法') || q.includes('结构')) {
-      answer = '古文语法具有以下特点：\n\n1. **词类活用**：名词作动词、形容词作动词等\n2. **特殊句式**：宾语前置、定语后置、状语后置\n3. **省略句**：省略主语、宾语、谓语等\n4. **判断句**：多用"者...也"结构'
-    } else if (q.includes('句式') || q.includes('特点')) {
-      answer = '本文句式特点分析：\n\n• 以散句为主，节奏舒缓\n• 偶用对仗，增添韵律美感\n• 虚词运用灵活，起承接转折作用\n• 语义凝练，意在言外'
-    } else if (q.includes('词') || q.includes('解读') || q.includes('关键')) {
-      answer = '关键词语解读：\n\n本文中的重要词汇需要结合上下文语境理解，特别是一些古今异义词、多义词以及具有特定文化内涵的典故用词。建议结合工具书和注释进行深入学习。'
-    } else {
-      answer = parsedResult.value
-        ? `根据解析结果，这个问题可以这样理解：\n\n${parsedResult.value.meaning}`
-        : '请先点击"开始解析"按钮进行分析，再针对具体内容提问。'
-    }
+    const answer = await aiApi.aiChat({
+      text: document.value.content || '',
+      question: q,
+      history
+    })
 
     parsingMessages.value.push({ type: 'ai', text: answer })
+    // 自动滚动到底部 (侧边栏)
+    nextTick(() => {
+      const sidebar = document.querySelector('.editor-sidebar')
+      if (sidebar) {
+        sidebar.scrollTop = sidebar.scrollHeight
+      }
+    })
   } catch (error) {
+    console.error('Parsing Q&A failed:', error)
     parsingMessages.value.push({ type: 'ai', text: '抱歉，暂时无法回答这个问题。' })
   } finally {
     isParsingLoading.value = false
@@ -355,19 +395,11 @@ const handleTokenize = async () => {
   isTokenizing.value = true
 
   try {
-    // 模拟AI分词（后端实现后将调用真实API）
-    await new Promise(resolve => setTimeout(resolve, 1500))
-
-    // 简单模拟分词结果
-    const words = document.value.content.replace(/\s+/g, '').split('')
-    const posTags: string[] = ['名', '动', '形', '代', '副', '介', '连', '助', '叹', '量']
-
-    tokenizeResult.value = words.slice(0, 50).map(word => {
-      const pos = posTags[Math.floor(Math.random() * posTags.length)] || '名'
-      return { word, pos }
-    })
+    const result = await aiApi.tokenizeText(document.value.content)
+    tokenizeResult.value = result
   } catch (error) {
     console.error('分词失败:', error)
+    alert('分词失败，请稍后再试')
   } finally {
     isTokenizing.value = false
   }
@@ -614,7 +646,7 @@ onMounted(() => {
                 <div v-if="annotations.length === 0" class="no-annotations">
                   暂无标注，点击上方按钮添加
                 </div>
-                <template v-for="ann in annotations" :key="ann.id">
+                <template v-for="ann in sortedAnnotations" :key="ann.id">
                   <div class="annotation-item">
                     <div class="ann-header">
                       <span
@@ -669,8 +701,8 @@ onMounted(() => {
                     v-for="(msg, index) in parsingMessages"
                     :key="index"
                     :class="['ai-message', msg.type]"
+                    v-html="msg.type === 'ai' ? md.render(msg.text) : msg.text"
                   >
-                    {{ msg.text }}
                   </div>
                   <div v-if="isParsingLoading" class="ai-message ai loading">
                     <span class="loading-dots">思考中</span>
@@ -738,8 +770,8 @@ onMounted(() => {
                     v-for="(msg, index) in tokenizeMessages"
                     :key="index"
                     :class="['ai-message', msg.type]"
+                    v-html="msg.type === 'ai' ? md.render(msg.text) : msg.text"
                   >
-                    {{ msg.text }}
                   </div>
                   <div v-if="isTokenizingLoading" class="ai-message ai loading">
                     <span class="loading-dots">思考中</span>
@@ -781,8 +813,8 @@ onMounted(() => {
                   v-for="(msg, index) in aiMessages"
                   :key="index"
                   :class="['ai-message', msg.type]"
+                  v-html="msg.type === 'ai' ? md.render(msg.text) : msg.text"
                 >
-                  {{ msg.text }}
                 </div>
                 <div v-if="isAiLoading" class="ai-message ai loading">
                   <span class="loading-dots">思考中</span>
@@ -913,7 +945,9 @@ onMounted(() => {
   display: grid;
   grid-template-columns: 1fr 360px;
   gap: 20px;
-  align-items: start;
+  align-items: stretch; /* 让左右两边拉伸到一样高 */
+  height: calc(100vh - 180px); /* 减去顶部导航和内边距的高度 */
+  min-height: 600px;
 }
 
 /* 编辑器内容 */
@@ -922,6 +956,8 @@ onMounted(() => {
   border: 1px solid var(--edge);
   border-radius: var(--radius-xl);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .editor-toolbar {
@@ -961,12 +997,13 @@ onMounted(() => {
 
 .text-editor {
   padding: 20px;
-  min-height: 500px;
+  flex: 1;
+  overflow-y: auto; /* 左侧内容超出时滚动 */
 }
 
 .text-area {
   width: 100%;
-  min-height: 460px;
+  min-height: 100%; /* 占满剩余空间 */
   border: 1px solid var(--edge);
   border-radius: var(--radius-lg);
   background: var(--paper);
@@ -974,7 +1011,7 @@ onMounted(() => {
   font-family: var(--font-serif);
   font-size: 18px;
   line-height: 2;
-  resize: vertical;
+  resize: none; /* 禁用手动调整大小，由布局控制 */
   color: var(--ink);
 }
 
@@ -995,7 +1032,26 @@ onMounted(() => {
 .editor-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  overflow-y: auto; /* 侧边栏整体滚动 */
+  padding-right: 4px; /* 为滚动条留一点空间 */
+}
+
+/* 自定义侧边栏滚动条 */
+.editor-sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.editor-sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.editor-sidebar::-webkit-scrollbar-thumb {
+  background: var(--edge);
+  border-radius: 3px;
+}
+
+.editor-sidebar::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-soft);
 }
 
 .sidebar-panel {
@@ -1003,6 +1059,7 @@ onMounted(() => {
   border: 1px solid var(--edge);
   border-radius: var(--radius-xl);
   padding: 20px;
+  flex-shrink: 0; /* 防止面板被压缩 */
 }
 
 .sidebar-panel h4 {
@@ -1193,9 +1250,13 @@ onMounted(() => {
 }
 
 .ai-messages {
-  flex: 1;
-  overflow-y: auto;
-  max-height: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-md);
+  background: var(--paper);
+  padding: 16px;
   margin-bottom: 16px;
 }
 
@@ -1205,6 +1266,30 @@ onMounted(() => {
   margin-bottom: 8px;
   font-size: 14px;
   line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ai-message :deep(p) {
+  margin: 0 0 8px 0;
+}
+
+.ai-message :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.ai-message :deep(strong) {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.ai-message :deep(ul), .ai-message :deep(ol) {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.ai-message :deep(li) {
+  margin-bottom: 4px;
 }
 
 .ai-message.user {
