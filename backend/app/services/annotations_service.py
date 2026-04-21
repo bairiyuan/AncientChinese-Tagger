@@ -74,6 +74,48 @@ def create_annotation(
     return _success(_annotation_to_dict(annotation))
 
 
+def create_annotations_bulk(
+    db: Session,
+    document_id: int,
+    annotations_data: list
+):
+    if document_id is None or not annotations_data:
+        raise HTTPException(status_code=400, detail="请求参数错误")
+
+    now = datetime.utcnow()
+    created_annotations = []
+
+    for data in annotations_data:
+        entity = data.get("entity")
+        entity_type = data.get("entity_type")
+        start_pos = data.get("start_pos")
+        end_pos = data.get("end_pos")
+
+        if not entity:
+            continue
+
+        _validate_entity_type(entity_type)
+        _validate_span(start_pos, end_pos)
+
+        annotation = Annotation(
+            document_id=document_id,
+            entity=entity,
+            entity_type=entity_type,
+            start_pos=start_pos,
+            end_pos=end_pos,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(annotation)
+        created_annotations.append(annotation)
+
+    db.commit()
+    for ann in created_annotations:
+        db.refresh(ann)
+
+    return _success([_annotation_to_dict(item) for item in created_annotations])
+
+
 def get_annotation_by_id(db: Session, annotation_id: int):
     annotation = db.query(Annotation).filter(Annotation.id == annotation_id).first()
     if not annotation:

@@ -42,6 +42,9 @@ def _to_api_project(item: Dict[str, Any]) -> Dict[str, Any]:
         "ownerId": item.get("owner_id"),
         "created_at": item.get("created_at"),
         "updated_at": item.get("updated_at"),
+        "documentsCount": item.get("documents_count", 0),
+        "annotationsCount": item.get("annotations_count", 0),
+        "entityDistribution": item.get("entity_distribution", {}),
     }
 
 

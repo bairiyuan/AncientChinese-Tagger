@@ -76,6 +76,7 @@ async def user_login(body: LoginBody, db: Session = Depends(get_db)):
         "data": {
             "id": user.get("id"),
             "username": user.get("username"),
+            "created_at": user.get("created_at"),
             "token": data.get("token") if isinstance(data, dict) else None,
         },
     }
