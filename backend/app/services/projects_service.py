@@ -16,6 +16,26 @@ def _success(data: Any) -> Dict[str, Any]:
 
 
 def _project_to_dict(project: Project) -> Dict[str, Any]:
+    # 统计该项目下所有文档的所有标注
+    total_annotations = 0
+    entity_distribution = {
+        "person": 0,
+        "location": 0,
+        "time": 0,
+        "other": 0
+    }
+    
+    if hasattr(project, 'documents'):
+        for doc in project.documents:
+            if hasattr(doc, 'annotations'):
+                total_annotations += len(doc.annotations)
+                for ann in doc.annotations:
+                    etype = ann.entity_type
+                    if etype in entity_distribution:
+                        entity_distribution[etype] += 1
+                    else:
+                        entity_distribution["other"] += 1
+
     return {
         "id": project.id,
         "name": project.name,
@@ -23,6 +43,9 @@ def _project_to_dict(project: Project) -> Dict[str, Any]:
         "owner_id": project.owner_id,
         "created_at": project.created_at.isoformat() if project.created_at else None,
         "updated_at": project.updated_at.isoformat() if project.updated_at else None,
+        "documents_count": len(project.documents) if hasattr(project, 'documents') else 0,
+        "annotations_count": total_annotations,
+        "entity_distribution": entity_distribution,
     }
 
 

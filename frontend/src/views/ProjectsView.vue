@@ -205,13 +205,21 @@ const openRename = () => {
 const handleRename = async () => {
   if (!currentProject.value || !editProjectName.value.trim()) return
   try {
-    currentProject.value.name = editProjectName.value.trim()
-    currentProject.value.description = editProjectDesc.value.trim() || null
-    // 实际项目中应该调用 API
-    // await mockApi.updateProject(currentProject.value.id, {...})
+    const updated = await mockApi.updateProject(currentProject.value.id, {
+      name: editProjectName.value.trim(),
+      description: editProjectDesc.value.trim() || null
+    })
+    
+    // 更新本地列表中的数据
+    const index = projects.value.findIndex(p => p.id === updated.id)
+    if (index !== -1) {
+      projects.value[index] = updated
+    }
+    
     showRenameModal.value = false
   } catch (error) {
     console.error('重命名失败:', error)
+    alert(error instanceof Error ? error.message : '重命名失败')
   }
 }
 
@@ -282,16 +290,17 @@ const showStats = async () => {
   if (!currentProject.value) return
   showMenuFor.value = null
   
-  // 模拟统计数据
+  // 使用来自后端的真实统计数据
+  const dist = currentProject.value.entityDistribution || {}
   projectStats.value = {
-    documentCount: Math.floor(Math.random() * 50) + 5,
-    annotationCount: Math.floor(Math.random() * 500) + 50,
+    documentCount: currentProject.value.documentsCount || 0,
+    annotationCount: currentProject.value.annotationsCount || 0,
     entityCounts: {
-      person: Math.floor(Math.random() * 100) + 20,
-      location: Math.floor(Math.random() * 80) + 15,
-      time: Math.floor(Math.random() * 60) + 10,
-      concept: Math.floor(Math.random() * 40) + 5,
-      other: Math.floor(Math.random() * 30) + 5
+      person: dist.person || 0,
+      location: dist.location || 0,
+      time: dist.time || 0,
+      concept: dist.concept || 0,
+      other: dist.other || 0
     }
   }
   showStatsModal.value = true
@@ -384,7 +393,7 @@ onUnmounted(() => {
             <h3>{{ project.name }}</h3>
             <p class="project-desc">{{ project.description || '暂无描述' }}</p>
             <div class="project-meta">
-              <span>文档 {{ Math.floor(Math.random() * 50) + 5 }}</span>
+              <span>文档 {{ project.documentsCount || 0 }}</span>
               <span>更新 {{ formatDate(project.updatedAt) }}</span>
             </div>
           </article>
