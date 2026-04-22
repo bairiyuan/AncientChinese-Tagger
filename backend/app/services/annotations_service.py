@@ -53,6 +53,11 @@ def create_annotation(
     if document_id is None or not entity:
         raise HTTPException(status_code=400, detail="请求参数错误")
 
+    # 检查文档是否存在
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="文档不存在")
+
     _validate_entity_type(entity_type)
     _validate_span(start_pos, end_pos)
 
@@ -81,6 +86,11 @@ def create_annotations_bulk(
 ):
     if document_id is None or not annotations_data:
         raise HTTPException(status_code=400, detail="请求参数错误")
+
+    # 检查文档是否存在
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="文档不存在")
 
     now = datetime.utcnow()
     created_annotations = []
