@@ -11,10 +11,23 @@ const user = ref({
   createdAt: ''
 })
 
-onMounted(() => {
+onMounted(async () => {
   const currentUser = mockApi.getCurrentUser()
   if (currentUser) {
     user.value = currentUser
+    // 尝试获取最新数据以确保包含注册时间
+    try {
+      const { getUser } = await import('@/api/users')
+      const latestUser = await getUser(currentUser.id)
+      if (latestUser) {
+        user.value = {
+          ...user.value,
+          createdAt: latestUser.createdAt || latestUser.created_at || user.value.createdAt
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch latest user info:', e)
+    }
   }
 })
 
@@ -135,7 +148,9 @@ const updatePassword = async () => {
           </div>
           <div class="user-info">
             <h2>{{ user.username }}</h2>
-            <p>注册于 {{ new Date(user.createdAt).toLocaleDateString('zh-CN') }}</p>
+            <p v-if="user.createdAt || user.created_at">
+              注册于 {{ new Date(user.createdAt || user.created_at || '').toLocaleDateString('zh-CN') }}
+            </p>
           </div>
         </div>
 

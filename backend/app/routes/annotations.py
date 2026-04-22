@@ -1,11 +1,20 @@
-from datetime import datetime, timezone
 from enum import Enum
-from typing import Dict, Optional
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field, model_validator
+from sqlalchemy.orm import Session
 
-from app.routes import documents as documents_module
+from app.services import annotations_service
+from app.utils import segment_text_with_jieba
+
+try:
+    from app.database import get_db
+except ImportError:
+    # 兼容当前工程尚未提供 get_db 的情况；实际运行时应由统一数据库模块提供。
+    def get_db():
+        raise RuntimeError("get_db 未配置，请在 app.database 中提供 SQLAlchemy Session 依赖")
+
 
 router = APIRouter(tags=["annotations"])
 
@@ -19,167 +28,186 @@ class EntityType(str, Enum):
 
 class AnnotationCreate(BaseModel):
     entity: str = Field(..., min_length=1)
-    entityType: EntityType
-    startPos: int = Field(..., ge=0)
-    endPos: int = Field(..., ge=0)
+    entity_type: EntityType
+    start_pos: int = Field(..., ge=0)
+    end_pos: int = Field(..., ge=0)
 
     @model_validator(mode="after")
     def validate_span(self):
-        if self.endPos < self.startPos:
-            raise ValueError("endPos 不能小于 startPos")
+        if self.end_pos < self.start_pos:
+            raise ValueError("end_pos 不能小于 start_pos")
         return self
 
 
 class AnnotationUpdate(BaseModel):
     entity: str = Field(..., min_length=1)
-    entityType: EntityType
-    startPos: int = Field(..., ge=0)
-    endPos: int = Field(..., ge=0)
+    entity_type: EntityType
+    start_pos: int = Field(..., ge=0)
+    end_pos: int = Field(..., ge=0)
 
     @model_validator(mode="after")
     def validate_span(self):
-        if self.endPos < self.startPos:
-            raise ValueError("endPos 不能小于 startPos")
+        if self.end_pos < self.start_pos:
+            raise ValueError("end_pos 不能小于 start_pos")
         return self
 
 
 class AnnotationPatch(BaseModel):
     entity: Optional[str] = Field(None, min_length=1)
-    entityType: Optional[EntityType] = None
-    startPos: Optional[int] = Field(None, ge=0)
-    endPos: Optional[int] = Field(None, ge=0)
+    entity_type: Optional[EntityType] = None
+    start_pos: Optional[int] = Field(None, ge=0)
+    end_pos: Optional[int] = Field(None, ge=0)
 
 
-_annotations: Dict[int, dict] = {}
-_next_id: int = 1
+class JiebaSegmentRequest(BaseModel):
+    text: str = Field(..., min_length=1, description="待分词文本")
 
 
-def _get_next_id() -> int:
-    global _next_id
-    current = _next_id
-    _next_id += 1
-    return current
+class JiebaSegmentResponse(BaseModel):
+    code: int = 0
+    message: str = "success"
+    data: List[str]
 
 
-def _find_annotation_or_404(annotation_id: int) -> dict:
-    annotation = _annotations.get(annotation_id)
-    if not annotation:
-        raise HTTPException(status_code=404, detail="标注不存在")
-    return annotation
-
-
-def _ensure_document_exists(document_id: int) -> None:
-    if document_id not in documents_module._documents:
-        raise HTTPException(status_code=404, detail="文档不存在")
-
-
-def _validate_span(start_pos: int, end_pos: int) -> None:
-    if end_pos < start_pos:
-        raise HTTPException(status_code=400, detail="endPos 不能小于 startPos")
-
-
-@router.get("/api/documents/{documentId}/annotations")
-async def list_annotations_by_document(documentId: int):
-    _ensure_document_exists(documentId)
-    items = [anno for anno in _annotations.values() if anno["documentId"] == documentId]
-    return {"code": 0, "message": "success", "data": items}
-
-
-@router.post("/api/documents/{documentId}/annotations", status_code=201)
-async def create_annotation_in_document(documentId: int, body: AnnotationCreate):
-    _ensure_document_exists(documentId)
-
-    annotation_id = _get_next_id()
-    now = datetime.now(timezone.utc).isoformat()
-    annotation = {
-        "id": annotation_id,
-        "documentId": documentId,
-        "entity": body.entity,
-        "entityType": body.entityType.value,
-        "startPos": body.startPos,
-        "endPos": body.endPos,
-        "createdAt": now,
-        "updatedAt": now,
+def _to_api_annotation(item: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": item.get("id"),
+        "document_id": item.get("document_id"),
+        "entity": item.get("entity"),
+        "entity_type": item.get("entity_type"),
+        "start_pos": item.get("start_pos"),
+        "end_pos": item.get("end_pos"),
+        "created_at": item.get("created_at"),
+        "updated_at": item.get("updated_at"),
     }
-    _annotations[annotation_id] = annotation
 
-    return {"code": 0, "message": "success", "data": annotation}
+
+def _normalize_service_response(result: Dict[str, Any]) -> Dict[str, Any]:
+    data = result.get("data")
+
+    if isinstance(data, list):
+        normalized_data: Any = [_to_api_annotation(item) for item in data]
+    elif isinstance(data, dict):
+        normalized_data = _to_api_annotation(data)
+    else:
+        normalized_data = data
+
+    return {
+        "code": result.get("code", 0),
+        "message": result.get("message", "success"),
+        "data": normalized_data,
+    }
+
+
+@router.post("/api/annotations/jieba-segment", response_model=JiebaSegmentResponse)
+async def jieba_segment_text(body: JiebaSegmentRequest):
+    tokens = segment_text_with_jieba(body.text)
+    return {"code": 0, "message": "success", "data": tokens}
+
+
+@router.get("/api/documents/{document_id}/annotations")
+async def list_annotations_by_document(document_id: int, db: Session = Depends(get_db)):
+    result = annotations_service.list_annotations_by_document(db=db, document_id=document_id)
+    return _normalize_service_response(result)
+
+
+@router.post("/api/documents/{document_id}/annotations", status_code=201)
+async def create_annotation_in_document(
+    document_id: int,
+    body: AnnotationCreate,
+    db: Session = Depends(get_db),
+):
+    result = annotations_service.create_annotation(
+        db=db,
+        document_id=document_id,
+        entity=body.entity,
+        entity_type=body.entity_type.value,
+        start_pos=body.start_pos,
+        end_pos=body.end_pos,
+    )
+    return _normalize_service_response(result)
+
+
+@router.post("/api/documents/{document_id}/annotations/bulk", status_code=201)
+async def create_annotations_bulk(
+    document_id: int,
+    body: List[AnnotationCreate],
+    db: Session = Depends(get_db),
+):
+    annotations_data = [
+        {
+            "entity": item.entity,
+            "entity_type": item.entity_type.value,
+            "start_pos": item.start_pos,
+            "end_pos": item.end_pos,
+        }
+        for item in body
+    ]
+    result = annotations_service.create_annotations_bulk(
+        db=db,
+        document_id=document_id,
+        annotations_data=annotations_data,
+    )
+    return _normalize_service_response(result)
 
 
 @router.get("/api/annotations")
 async def list_annotations(
-    projectId: Optional[int] = Query(None, ge=1),
-    documentId: Optional[int] = Query(None, ge=1),
-    entityType: Optional[EntityType] = Query(None),
+    project_id: Optional[int] = Query(None, ge=1),
+    document_id: Optional[int] = Query(None, ge=1),
+    entity_type: Optional[EntityType] = Query(None),
+    db: Session = Depends(get_db),
 ):
-    items = list(_annotations.values())
-
-    if documentId is not None:
-        items = [anno for anno in items if anno["documentId"] == documentId]
-
-    if projectId is not None:
-        items = [
-            anno
-            for anno in items
-            if documents_module._documents.get(anno["documentId"], {}).get("projectId") == projectId
-        ]
-
-    if entityType is not None:
-        items = [anno for anno in items if anno["entityType"] == entityType.value]
-
-    return {"code": 0, "message": "success", "data": items}
+    result = annotations_service.search_annotations(
+        db=db,
+        project_id=project_id,
+        document_id=document_id,
+        entity_type=entity_type.value if entity_type is not None else None,
+    )
+    return _normalize_service_response(result)
 
 
-@router.get("/api/annotations/{annotationId}")
-async def get_annotation(annotationId: int):
-    annotation = _find_annotation_or_404(annotationId)
-    return {"code": 0, "message": "success", "data": annotation}
+@router.get("/api/annotations/{annotation_id}")
+async def get_annotation(annotation_id: int, db: Session = Depends(get_db)):
+    result = annotations_service.get_annotation_by_id(db=db, annotation_id=annotation_id)
+    return _normalize_service_response(result)
 
 
-@router.put("/api/annotations/{annotationId}")
-async def update_annotation(annotationId: int, body: AnnotationUpdate):
-    annotation = _find_annotation_or_404(annotationId)
-
-    annotation["entity"] = body.entity
-    annotation["entityType"] = body.entityType.value
-    annotation["startPos"] = body.startPos
-    annotation["endPos"] = body.endPos
-    annotation["updatedAt"] = datetime.now(timezone.utc).isoformat()
-
-    return {"code": 0, "message": "success", "data": annotation}
-
-
-@router.patch("/api/annotations/{annotationId}")
-async def patch_annotation(annotationId: int, body: AnnotationPatch):
-    annotation = _find_annotation_or_404(annotationId)
-
-    if (
-        body.entity is None
-        and body.entityType is None
-        and body.startPos is None
-        and body.endPos is None
-    ):
-        raise HTTPException(status_code=400, detail="至少提供一个可更新字段")
-
-    start_pos = body.startPos if body.startPos is not None else annotation["startPos"]
-    end_pos = body.endPos if body.endPos is not None else annotation["endPos"]
-    _validate_span(start_pos, end_pos)
-
-    if body.entity is not None:
-        annotation["entity"] = body.entity
-    if body.entityType is not None:
-        annotation["entityType"] = body.entityType.value
-    if body.startPos is not None:
-        annotation["startPos"] = body.startPos
-    if body.endPos is not None:
-        annotation["endPos"] = body.endPos
-
-    annotation["updatedAt"] = datetime.now(timezone.utc).isoformat()
-    return {"code": 0, "message": "success", "data": annotation}
+@router.put("/api/annotations/{annotation_id}")
+async def update_annotation(
+    annotation_id: int,
+    body: AnnotationUpdate,
+    db: Session = Depends(get_db),
+):
+    result = annotations_service.update_annotation(
+        db=db,
+        annotation_id=annotation_id,
+        entity=body.entity,
+        entity_type=body.entity_type.value,
+        start_pos=body.start_pos,
+        end_pos=body.end_pos,
+    )
+    return _normalize_service_response(result)
 
 
-@router.delete("/api/annotations/{annotationId}")
-async def delete_annotation(annotationId: int):
-    _find_annotation_or_404(annotationId)
-    del _annotations[annotationId]
-    return {"code": 0, "message": "success", "data": None}
+@router.patch("/api/annotations/{annotation_id}")
+async def patch_annotation(
+    annotation_id: int,
+    body: AnnotationPatch,
+    db: Session = Depends(get_db),
+):
+    result = annotations_service.patch_annotation(
+        db=db,
+        annotation_id=annotation_id,
+        entity=body.entity,
+        entity_type=body.entity_type.value if body.entity_type is not None else None,
+        start_pos=body.start_pos,
+        end_pos=body.end_pos,
+    )
+    return _normalize_service_response(result)
+
+
+@router.delete("/api/annotations/{annotation_id}")
+async def delete_annotation(annotation_id: int, db: Session = Depends(get_db)):
+    result = annotations_service.delete_annotation(db=db, annotation_id=annotation_id)
+    return _normalize_service_response(result)
