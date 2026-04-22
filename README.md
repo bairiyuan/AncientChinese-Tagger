@@ -1,5 +1,8 @@
 # AncientChinese
 
+[![codecov backend](https://codecov.io/gh/bairiyuan/AncientChinese-Tagger/branch/main/graph/badge.svg?flag=backend)](https://codecov.io/gh/bairiyuan/AncientChinese-Tagger)
+[![codecov frontend](https://codecov.io/gh/bairiyuan/AncientChinese-Tagger/branch/main/graph/badge.svg?flag=frontend)](https://codecov.io/gh/bairiyuan/AncientChinese-Tagger)
+
 汉语智能标注平台 - 古汉语文本处理与标注系统
 
 figma链接：https://www.figma.com/design/ihRPLQpRDVUGJyPdDE2xhA/AncientChinese?node-id=0-1&t=ZTJSgGmVLfg1Mtxp-1

@@ -4,6 +4,11 @@ __pycache__/
 *$py.class
 .pytest_cache/
 *.zip
+.coverage
+htmlcov/
+backend/coverage.xml
+test_db.sqlite
+frontend/coverage/
 
 # IDE
 .idea/
