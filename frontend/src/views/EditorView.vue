@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { ref, onMounted, computed, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
 import { mockApi } from '@/api/mock'
 import { aiApi } from '@/api'
 import type { Document, Annotation, EntityType } from '@/api/types'
@@ -8,7 +8,6 @@ import MarkdownIt from 'markdown-it'
 
 const md = new MarkdownIt()
 
-const router = useRouter()
 const route = useRoute()
 
 // SVG 图标
@@ -19,10 +18,12 @@ const plusIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"
 const projectId = computed(() => Number(route.params.projectId))
 const documentId = computed(() => Number(route.params.documentId))
 
+type DocumentWithAnnotations = Document & { annotations?: Annotation[] }
+
 const document = ref<Document | null>(null)
 const annotations = ref<Annotation[]>([])
 const sortedAnnotations = computed(() => {
-  return [...annotations.value].sort((a, b) => (a.start_pos || 0) - (b.start_pos || 0))
+  return [...annotations.value].sort((a, b) => (a.startPos || 0) - (b.startPos || 0))
 })
 const isLoading = ref(true)
 const activeTab = ref('annotation')
@@ -145,8 +146,9 @@ const loadData = async () => {
     if (data) {
       document.value = data
       // 如果后端返回的数据中包含标注，则使用后端的数据
-      if ((data as any).annotations) {
-        annotations.value = (data as any).annotations
+      const documentWithAnnotations = data as DocumentWithAnnotations
+      if (documentWithAnnotations.annotations) {
+        annotations.value = documentWithAnnotations.annotations
       } else {
         annotations.value = await mockApi.getAnnotations(documentId.value)
       }
@@ -168,7 +170,7 @@ const handleAutoAnnotate = async () => {
     for (const item of suggestions) {
       const text = item.entity
       const content = document.value.content
-      let start = content.indexOf(text)
+      const start = content.indexOf(text)
       
       if (start !== -1) {
         try {
@@ -179,7 +181,7 @@ const handleAutoAnnotate = async () => {
             endPos: start + text.length
           })
           newAnns.push(ann)
-        } catch (e) {
+        } catch {
           // 跳过已存在的
         }
       }
@@ -313,7 +315,7 @@ const askAiQuestion = async () => {
     aiMessages.value.push({ type: 'ai', text: answer })
     // 自动滚动到底部 (侧边栏)
     nextTick(() => {
-      const sidebar = document.querySelector('.editor-sidebar')
+      const sidebar = window.document.querySelector<HTMLElement>('.editor-sidebar')
       if (sidebar) {
         sidebar.scrollTop = sidebar.scrollHeight
       }
@@ -373,7 +375,7 @@ const askParsingQuestion = async () => {
     parsingMessages.value.push({ type: 'ai', text: answer })
     // 自动滚动到底部 (侧边栏)
     nextTick(() => {
-      const sidebar = document.querySelector('.editor-sidebar')
+      const sidebar = window.document.querySelector<HTMLElement>('.editor-sidebar')
       if (sidebar) {
         sidebar.scrollTop = sidebar.scrollHeight
       }
@@ -435,50 +437,11 @@ const askTokenizeQuestion = async () => {
     }
 
     tokenizeMessages.value.push({ type: 'ai', text: answer })
-  } catch (error) {
+  } catch {
     tokenizeMessages.value.push({ type: 'ai', text: '抱歉，暂时无法回答这个问题。' })
   } finally {
     isTokenizingLoading.value = false
   }
-}
-
-const highlightText = (text: string) => {
-  if (!text) return ''
-
-  let result = text
-  const marks: { start: number; end: number; type: EntityType; text: string }[] = []
-
-  annotations.value.forEach(ann => {
-    if (ann.startPos !== null && ann.endPos !== null) {
-      marks.push({
-        start: ann.startPos,
-        end: ann.endPos,
-        type: ann.entityType,
-        text: ann.entity
-      })
-    }
-  })
-
-  marks.sort((a, b) => a.start - b.start)
-
-  let html = ''
-  let lastEnd = 0
-
-  marks.forEach(mark => {
-    if (mark.start >= lastEnd) {
-      html += result.slice(lastEnd, mark.start)
-      const typeInfo = getEntityTypeInfo(mark.type)
-      html += `<mark style="background: ${typeInfo.color}20; border-bottom: 2px solid ${typeInfo.color}; padding: 0 2px;" title="${typeInfo.label}: ${mark.text}">${mark.text}</mark>`
-      lastEnd = mark.end
-    }
-  })
-
-  html += result.slice(lastEnd)
-  return html
-}
-
-const goBack = () => {
-  router.push(`/projects/${projectId.value}/documents`)
 }
 
 onMounted(() => {

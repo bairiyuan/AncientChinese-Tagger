@@ -234,12 +234,6 @@ const softDeleteProject = () => {
   showMenuFor.value = null
 }
 
-// 确认彻底删除
-const confirmDelete = () => {
-  showMenuFor.value = null
-  showDeleteConfirm.value = true
-}
-
 // 执行彻底删除
 const handleDelete = () => {
   if (!currentProject.value) return
