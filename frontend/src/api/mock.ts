@@ -25,6 +25,10 @@ type ApiDocument = {
   updated_at: string
 }
 
+type ApiDocumentWithAnnotations = ApiDocument & {
+  annotations?: ApiAnnotation[]
+}
+
 type ApiAnnotation = {
   id: number
   document_id: number
@@ -242,12 +246,12 @@ export const mockApi = {
   },
 
   async getDocument(documentId: number): Promise<Document | undefined> {
-    const data = await apiClient.request<ApiDocument>(`/api/documents/${documentId}`)
+    const data = await apiClient.request<ApiDocumentWithAnnotations>(`/api/documents/${documentId}`)
     if (!data) return undefined
     const doc = toDocument(data)
     // 确保从后端返回的标注字段正确映射
-    if ((data as any).annotations) {
-      (doc as any).annotations = (data as any).annotations.map(toAnnotation)
+    if (data.annotations) {
+      Object.assign(doc, { annotations: data.annotations.map(toAnnotation) })
     }
     return doc
   },

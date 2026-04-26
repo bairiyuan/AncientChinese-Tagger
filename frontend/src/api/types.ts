@@ -26,7 +26,7 @@ export interface UserCreate {
   password: string
 }
 
-export interface UserUpdate extends UserCreate {}
+export type UserUpdate = UserCreate
 
 export interface UserPatch {
   username?: string
@@ -64,7 +64,7 @@ export interface ProjectCreate {
   ownerId: number
 }
 
-export interface ProjectUpdate extends ProjectCreate {}
+export type ProjectUpdate = ProjectCreate
 
 export interface ProjectPatch {
   name?: string
@@ -87,7 +87,7 @@ export interface DocumentCreate {
   content: string
 }
 
-export interface DocumentUpdate extends DocumentCreate {}
+export type DocumentUpdate = DocumentCreate
 
 export interface DocumentPatch {
   title?: string
@@ -112,7 +112,7 @@ export interface AnnotationCreate {
   endPos: number
 }
 
-export interface AnnotationUpdate extends AnnotationCreate {}
+export type AnnotationUpdate = AnnotationCreate
 
 export interface AnnotationPatch {
   entity?: string
