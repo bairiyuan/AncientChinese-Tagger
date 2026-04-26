@@ -109,3 +109,62 @@ def test_patch_with_invalid_span_should_fail(client, test_user, auth_headers) ->
     resp = client.patch(f"/api/annotations/{created['id']}", json={"start_pos": 5, "end_pos": 2}, headers=auth_headers)
     assert resp.status_code == 400
     assert "参数错误" in resp.json()["detail"]
+
+
+def test_jieba_segment_text(client) -> None:
+    resp = client.post(
+        "/api/annotations/jieba-segment",
+        json={"text": "项羽名籍"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["code"] == 0
+    assert isinstance(body["data"], list)
+    assert len(body["data"]) > 0
+
+
+def test_create_annotations_bulk_success(client, test_user, auth_headers) -> None:
+    project_id = _create_project(client, "项目A", test_user["id"], auth_headers)
+    doc_id = _create_document(client, project_id, "文档A", "项羽名籍", auth_headers)
+
+    resp = client.post(
+        f"/api/documents/{doc_id}/annotations/bulk",
+        json=[
+            {"entity": "项羽", "entity_type": "person", "start_pos": 0, "end_pos": 2},
+            {"entity": "名籍", "entity_type": "other", "start_pos": 2, "end_pos": 4},
+        ],
+        headers=auth_headers,
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["code"] == 0
+    assert len(body["data"]) == 2
+
+
+def test_search_annotations_by_project(client, test_user, auth_headers) -> None:
+    project_id = _create_project(client, "项目A", test_user["id"], auth_headers)
+    doc_id = _create_document(client, project_id, "文档A", "项羽名籍", auth_headers)
+    
+    _create_annotation(client, doc_id, "项羽", "person", 0, 2, auth_headers)
+    _create_annotation(client, doc_id, "名籍", "other", 2, 4, auth_headers)
+
+    resp = client.get(f"/api/annotations?project_id={project_id}", headers=auth_headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["code"] == 0
+    assert len(body["data"]) == 2
+
+
+def test_search_annotations_by_entity_type(client, test_user, auth_headers) -> None:
+    project_id = _create_project(client, "项目A", test_user["id"], auth_headers)
+    doc_id = _create_document(client, project_id, "文档A", "项羽名籍", auth_headers)
+    
+    _create_annotation(client, doc_id, "项羽", "person", 0, 2, auth_headers)
+    _create_annotation(client, doc_id, "名籍", "other", 2, 4, auth_headers)
+
+    resp = client.get("/api/annotations?entity_type=person", headers=auth_headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["code"] == 0
+    assert len(body["data"]) == 1
+    assert body["data"][0]["entity_type"] == "person"
