@@ -47,7 +47,7 @@ function isSuccessCode(code: number | undefined): boolean {
   return code === 0 || code === 200
 }
 
-class HttpClient {
+export class HttpClient {
   private readonly baseUrl: string
   private tokenGetter?: () => string | null | undefined
 

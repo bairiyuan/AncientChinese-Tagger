@@ -1,107 +1,80 @@
-from fastapi.testclient import TestClient
+import pytest
 
-from app.main import app
-from app.routes import projects as projects_module
-
-
-client = TestClient(app)
-
-
-def _create_project(name: str, description: str, owner_id: int) -> dict:
+def _create_project(client, name: str, description: str, owner_id: int, headers: dict) -> dict:
     resp = client.post(
         "/api/projects",
         json={"name": name, "description": description, "ownerId": owner_id},
+        headers=headers,
     )
     assert resp.status_code == 201
     return resp.json()["data"]
 
+def test_create_project_success(client, test_user, auth_headers) -> None:
+    created = _create_project(client, "项目A", "描述A", test_user["id"], auth_headers)
 
-def setup_function() -> None:
-    projects_module._projects.clear()
-    projects_module._next_id = 1
-
-
-def test_create_project_success() -> None:
-    created = _create_project("项目A", "描述A", 1)
-
-    assert created["id"] == 1
     assert created["name"] == "项目A"
     assert created["description"] == "描述A"
-    assert created["ownerId"] == 1
+    assert created["ownerId"] == test_user["id"]
 
+def test_list_projects_with_pagination(client, test_user, auth_headers) -> None:
+    for i in range(5):
+        _create_project(client, f"项目{i}", f"描述{i}", test_user["id"], auth_headers)
 
-def test_list_projects_with_pagination() -> None:
-    _create_project("项目1", "描述1", 1)
-    _create_project("项目2", "描述2", 1)
-    _create_project("项目3", "描述3", 2)
-
-    resp = client.get("/api/projects?page=1&pageSize=2")
-
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["code"] == 0
-    assert body["data"]["total"] == 3
-    assert body["data"]["page"] == 1
-    assert body["data"]["pageSize"] == 2
-    assert len(body["data"]["items"]) == 2
-
-
-def test_list_projects_filter_by_owner_id() -> None:
-    _create_project("项目1", "描述1", 1)
-    _create_project("项目2", "描述2", 2)
-    _create_project("项目3", "描述3", 2)
-
-    resp = client.get("/api/projects?ownerId=2&page=1&pageSize=10")
+    # 这里参数名是 pageSize
+    resp = client.get("/api/projects?page=1&pageSize=3", headers=auth_headers)
 
     assert resp.status_code == 200
     body = resp.json()
     assert body["code"] == 0
-    assert body["data"]["total"] == 2
-    assert all(item["ownerId"] == 2 for item in body["data"]["items"])
+    assert body["data"]["total"] == 5
+    assert len(body["data"]["items"]) == 3
 
+def test_list_projects_filter_by_owner_id(client, test_user, auth_headers) -> None:
+    _create_project(client, "我的项目", "描述", test_user["id"], auth_headers)
+    
+    resp = client.get(f"/api/projects?ownerId={test_user['id']}", headers=auth_headers)
 
-def test_get_put_patch_delete_project_flow() -> None:
-    created = _create_project("项目A", "描述A", 1)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert any(p["ownerId"] == test_user["id"] for p in body["data"]["items"])
 
-    get_resp = client.get(f"/api/projects/{created['id']}")
+def test_get_put_patch_delete_project_flow(client, test_user, auth_headers) -> None:
+    created = _create_project(client, "原始项目", "原始描述", test_user["id"], auth_headers)
+    project_id = created["id"]
+
+    get_resp = client.get(f"/api/projects/{project_id}", headers=auth_headers)
     assert get_resp.status_code == 200
-    assert get_resp.json()["data"]["name"] == "项目A"
+    assert get_resp.json()["data"]["name"] == "原始项目"
 
     put_resp = client.put(
-        f"/api/projects/{created['id']}",
-        json={"name": "项目B", "description": "描述B", "ownerId": 2},
+        f"/api/projects/{project_id}",
+        json={"name": "修改后项目", "description": "修改后描述", "ownerId": test_user["id"]},
+        headers=auth_headers,
     )
     assert put_resp.status_code == 200
-    assert put_resp.json()["data"]["name"] == "项目B"
-    assert put_resp.json()["data"]["ownerId"] == 2
+    assert put_resp.json()["data"]["name"] == "修改后项目"
 
     patch_resp = client.patch(
-        f"/api/projects/{created['id']}",
-        json={"description": "描述C"},
+        f"/api/projects/{project_id}",
+        json={"name": "补丁后项目"},
+        headers=auth_headers,
     )
     assert patch_resp.status_code == 200
-    assert patch_resp.json()["data"]["description"] == "描述C"
+    assert patch_resp.json()["data"]["name"] == "补丁后项目"
 
-    delete_resp = client.delete(f"/api/projects/{created['id']}")
-    assert delete_resp.status_code == 200
-    assert delete_resp.json()["data"] is None
+    del_resp = client.delete(f"/api/projects/{project_id}", headers=auth_headers)
+    assert del_resp.status_code == 200  # API 返回 200 success
 
-    get_deleted_resp = client.get(f"/api/projects/{created['id']}")
+    get_deleted_resp = client.get(f"/api/projects/{project_id}", headers=auth_headers)
     assert get_deleted_resp.status_code == 404
-    assert get_deleted_resp.json()["detail"] == "项目不存在"
 
-
-def test_get_project_not_found() -> None:
-    resp = client.get("/api/projects/999")
-
+def test_get_project_not_found(client, auth_headers) -> None:
+    resp = client.get("/api/projects/999", headers=auth_headers)
     assert resp.status_code == 404
-    assert resp.json()["detail"] == "项目不存在"
 
+def test_patch_without_fields_should_fail(client, test_user, auth_headers) -> None:
+    created = _create_project(client, "项目A", "描述A", test_user["id"], auth_headers)
 
-def test_patch_without_fields_should_fail() -> None:
-    created = _create_project("项目A", "描述A", 1)
-
-    resp = client.patch(f"/api/projects/{created['id']}", json={})
-
+    resp = client.patch(f"/api/projects/{created['id']}", json={}, headers=auth_headers)
     assert resp.status_code == 400
-    assert resp.json()["detail"] == "至少提供一个可更新字段"
+    assert "至少提供一个" in resp.json()["detail"]

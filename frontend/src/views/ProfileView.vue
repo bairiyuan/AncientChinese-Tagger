@@ -1,9 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { mockApi } from '@/api/mock'
-
-const router = useRouter()
 
 const user = ref({
   id: 0,
@@ -148,8 +145,8 @@ const updatePassword = async () => {
           </div>
           <div class="user-info">
             <h2>{{ user.username }}</h2>
-            <p v-if="user.createdAt || user.created_at">
-              注册于 {{ new Date(user.createdAt || user.created_at || '').toLocaleDateString('zh-CN') }}
+            <p v-if="user.createdAt">
+              注册于 {{ new Date(user.createdAt).toLocaleDateString('zh-CN') }}
             </p>
           </div>
         </div>
