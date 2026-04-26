@@ -11,6 +11,7 @@
     "type-check": "vue-tsc --build",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "coverage": "vitest run --coverage",
     "lint": "run-s lint:*",
     "lint:oxlint": "oxlint . --fix",
