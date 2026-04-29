@@ -79,7 +79,7 @@ def chat_with_ai(text: str, question: str, history: List[Dict[str, str]] = None)
             response_text = response_text[1:-1]
             
         return response_text.strip()
-    except:
+    except Exception:
         return "抱歉，AI助手暂时无法回答这个问题，请稍后再试。"
 
 def auto_annotate_text(text: str) -> List[Dict[str, Any]]:
@@ -108,7 +108,7 @@ def auto_annotate_text(text: str) -> List[Dict[str, Any]]:
         if start != -1 and end != 0:
             return json.loads(response_text[start:end])
         return []
-    except:
+    except Exception:
         return []
 
 def tokenize_ancient_text(text: str) -> List[Dict[str, str]]:
