@@ -1,8 +1,8 @@
-name: test
+name: ci
 
 on:
   push:
-    branches: [ "main", "develop" ]
+    branches: ["main", "develop"]
   pull_request:
 
 jobs:
@@ -14,19 +14,25 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
 
       - name: Install backend dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
+          pip install ruff
+
+      - name: Ruff lint
+        run: ruff check backend
 
       - name: Run backend tests with coverage
         env:
           PYTHONPATH: backend
           DB_HOST: 127.0.0.1
           DB_PORT: "3306"
-          DB_USER: root
+          DB_USER: dummy
           DB_PASSWORD: dummy
           DB_NAME: ancient
         run: |
@@ -48,12 +54,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "npm"
+          cache: npm
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
+
+      - name: ESLint lint
+        working-directory: frontend
+        run: npx eslint . --max-warnings=0
 
       - name: Run frontend tests with coverage
         working-directory: frontend

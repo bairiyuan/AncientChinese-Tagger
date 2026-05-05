@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mockApi, mockStore } from '@/api/mock'
+import type { Annotation, Document } from '@/api/types'
 import { mockFetch } from '../setup'
 
 const mockResponse = (data: unknown, init?: ResponseInit) => {
@@ -447,8 +448,9 @@ describe('mockApi', () => {
       )
 
       const doc = await mockApi.getDocument(3)
-      expect((doc as any).annotations).toHaveLength(1)
-      expect((doc as any).annotations[0]!.entity).toBe('孔子')
+      const docWithAnnotations = doc as (Document & { annotations?: Annotation[] }) | undefined
+      expect(docWithAnnotations?.annotations).toHaveLength(1)
+      expect(docWithAnnotations?.annotations?.[0]!.entity).toBe('孔子')
     })
   })
 
