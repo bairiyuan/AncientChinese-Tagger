@@ -1,5 +1,6 @@
 # AncientChinese
 
+[![CI](https://github.com/bairiyuan/AncientChinese-Tagger/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/bairiyuan/AncientChinese-Tagger/actions)
 [![codecov backend](https://codecov.io/gh/bairiyuan/AncientChinese-Tagger/branch/develop/graph/badge.svg?flag=backend)](https://codecov.io/gh/bairiyuan/AncientChinese-Tagger)
 [![codecov frontend](https://codecov.io/gh/bairiyuan/AncientChinese-Tagger/branch/develop/graph/badge.svg?flag=frontend)](https://codecov.io/gh/bairiyuan/AncientChinese-Tagger)
 

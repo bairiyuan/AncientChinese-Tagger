@@ -1,5 +1,5 @@
 from typing import List, Optional, Dict
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.services import llm_service
