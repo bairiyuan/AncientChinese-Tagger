@@ -5,8 +5,13 @@ import { mockApi } from '@/api/mock'
 import { aiApi } from '@/api'
 import type { Document, Annotation, EntityType } from '@/api/types'
 import MarkdownIt from 'markdown-it'
+import DOMPurify from 'dompurify'
 
 const md = new MarkdownIt()
+
+const renderAiMessageHtml = (text: string) => {
+  return DOMPurify.sanitize(md.render(text))
+}
 
 const route = useRoute()
 
@@ -664,8 +669,9 @@ onMounted(() => {
                     v-for="(msg, index) in parsingMessages"
                     :key="index"
                     :class="['ai-message', msg.type]"
-                    v-html="msg.type === 'ai' ? md.render(msg.text) : msg.text"
                   >
+                    <div v-if="msg.type === 'ai'" v-html="renderAiMessageHtml(msg.text)"></div>
+                    <template v-else>{{ msg.text }}</template>
                   </div>
                   <div v-if="isParsingLoading" class="ai-message ai loading">
                     <span class="loading-dots">思考中</span>
@@ -733,8 +739,9 @@ onMounted(() => {
                     v-for="(msg, index) in tokenizeMessages"
                     :key="index"
                     :class="['ai-message', msg.type]"
-                    v-html="msg.type === 'ai' ? md.render(msg.text) : msg.text"
                   >
+                    <div v-if="msg.type === 'ai'" v-html="renderAiMessageHtml(msg.text)"></div>
+                    <template v-else>{{ msg.text }}</template>
                   </div>
                   <div v-if="isTokenizingLoading" class="ai-message ai loading">
                     <span class="loading-dots">思考中</span>
@@ -776,8 +783,9 @@ onMounted(() => {
                   v-for="(msg, index) in aiMessages"
                   :key="index"
                   :class="['ai-message', msg.type]"
-                  v-html="msg.type === 'ai' ? md.render(msg.text) : msg.text"
                 >
+                  <div v-if="msg.type === 'ai'" v-html="renderAiMessageHtml(msg.text)"></div>
+                  <template v-else>{{ msg.text }}</template>
                 </div>
                 <div v-if="isAiLoading" class="ai-message ai loading">
                   <span class="loading-dots">思考中</span>
