@@ -26,12 +26,7 @@ pip install pytest httpx
 
 ```powershell
 # 设置临时环境变量（仅对本次测试有效）
-$env:PYTHONPATH="backend"
-$env:DB_HOST="121.196.168.115"
-$env:DB_PORT="3306"
-$env:DB_USER="root"
-$env:DB_PASSWORD="Ancient10086."
-$env:DB_NAME="ancient"
+$env:PYTHONPATH = ".\backend"
 
 # 运行所有测试
 pytest backend/tests

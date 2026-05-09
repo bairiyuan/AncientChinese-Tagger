@@ -35,7 +35,8 @@ def test_create_user_success_mock_db(mock_hash_password):
     assert result["code"] == 0
     assert result["data"]["id"] == 1
     assert result["data"]["username"] == "newuser"
-    assert result["data"]["password"] == "hashed-password"
+    # 安全修复：响应中不再包含密码字段
+    assert "password" not in result["data"]
     db.add.assert_called_once()
     db.commit.assert_called_once()
     db.refresh.assert_called_once()
@@ -97,7 +98,7 @@ def test_create_annotation_document_not_found_mock_db():
     db.query.side_effect = query_side_effect
 
     with pytest.raises(HTTPException) as exc:
-        annotations_service.create_annotation(db, 999, "测试", "other", 0, 1)
+        annotations_service.create_annotation(db, 999, "测试", "other", 0, 1, current_user_id=1)
     assert exc.value.status_code == 404
     assert "文档不存在" in exc.value.detail
 

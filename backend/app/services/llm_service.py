@@ -1,9 +1,13 @@
+import os
 import requests
 import json
 from typing import Dict, Any, List
 
-DEEPSEEK_API_KEY = "sk-7392bbb92a8947948744e2183038505f"
-DEEPSEEK_BASE_URL = "https://api.deepseek.com/chat/completions"
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/chat/completions")
+
+if not DEEPSEEK_API_KEY:
+    raise RuntimeError("DEEPSEEK_API_KEY environment variable is not set")
 
 def call_deepseek(messages: List[Dict[str, str]], temperature: float = 0.7, timeout: int = 60) -> str:
     headers = {

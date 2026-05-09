@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
+from app.dependencies.auth import get_current_user
+from app.models.user import User
 from app.services import annotations_service
 from app.utils import segment_text_with_jieba
 
@@ -100,14 +102,14 @@ def _normalize_service_response(result: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @router.post("/api/annotations/jieba-segment", response_model=JiebaSegmentResponse)
-async def jieba_segment_text(body: JiebaSegmentRequest):
+async def jieba_segment_text(body: JiebaSegmentRequest, current_user: User = Depends(get_current_user)):
     tokens = segment_text_with_jieba(body.text)
     return {"code": 0, "message": "success", "data": tokens}
 
 
 @router.get("/api/documents/{document_id}/annotations")
-async def list_annotations_by_document(document_id: int, db: Session = Depends(get_db)):
-    result = annotations_service.list_annotations_by_document(db=db, document_id=document_id)
+async def list_annotations_by_document(document_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    result = annotations_service.list_annotations_by_document(db=db, document_id=document_id, current_user_id=current_user.id)
     return _normalize_service_response(result)
 
 
@@ -116,6 +118,7 @@ async def create_annotation_in_document(
     document_id: int,
     body: AnnotationCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     result = annotations_service.create_annotation(
         db=db,
@@ -124,6 +127,7 @@ async def create_annotation_in_document(
         entity_type=body.entity_type.value,
         start_pos=body.start_pos,
         end_pos=body.end_pos,
+        current_user_id=current_user.id,
     )
     return _normalize_service_response(result)
 
@@ -133,6 +137,7 @@ async def create_annotations_bulk(
     document_id: int,
     body: List[AnnotationCreate],
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     annotations_data = [
         {
@@ -147,6 +152,7 @@ async def create_annotations_bulk(
         db=db,
         document_id=document_id,
         annotations_data=annotations_data,
+        current_user_id=current_user.id,
     )
     return _normalize_service_response(result)
 
@@ -157,19 +163,21 @@ async def list_annotations(
     document_id: Optional[int] = Query(None, ge=1),
     entity_type: Optional[EntityType] = Query(None),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     result = annotations_service.search_annotations(
         db=db,
         project_id=project_id,
         document_id=document_id,
         entity_type=entity_type.value if entity_type is not None else None,
+        current_user_id=current_user.id,
     )
     return _normalize_service_response(result)
 
 
 @router.get("/api/annotations/{annotation_id}")
-async def get_annotation(annotation_id: int, db: Session = Depends(get_db)):
-    result = annotations_service.get_annotation_by_id(db=db, annotation_id=annotation_id)
+async def get_annotation(annotation_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    result = annotations_service.get_annotation_by_id(db=db, annotation_id=annotation_id, current_user_id=current_user.id)
     return _normalize_service_response(result)
 
 
@@ -178,6 +186,7 @@ async def update_annotation(
     annotation_id: int,
     body: AnnotationUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     result = annotations_service.update_annotation(
         db=db,
@@ -186,6 +195,7 @@ async def update_annotation(
         entity_type=body.entity_type.value,
         start_pos=body.start_pos,
         end_pos=body.end_pos,
+        current_user_id=current_user.id,
     )
     return _normalize_service_response(result)
 
@@ -195,10 +205,12 @@ async def patch_annotation(
     annotation_id: int,
     body: AnnotationPatch,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     result = annotations_service.patch_annotation(
         db=db,
         annotation_id=annotation_id,
+        current_user_id=current_user.id,
         entity=body.entity,
         entity_type=body.entity_type.value if body.entity_type is not None else None,
         start_pos=body.start_pos,
@@ -208,6 +220,6 @@ async def patch_annotation(
 
 
 @router.delete("/api/annotations/{annotation_id}")
-async def delete_annotation(annotation_id: int, db: Session = Depends(get_db)):
-    result = annotations_service.delete_annotation(db=db, annotation_id=annotation_id)
+async def delete_annotation(annotation_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    result = annotations_service.delete_annotation(db=db, annotation_id=annotation_id, current_user_id=current_user.id)
     return _normalize_service_response(result)
