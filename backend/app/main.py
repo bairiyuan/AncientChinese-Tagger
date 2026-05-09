@@ -1,18 +1,17 @@
-import os
 from dotenv import load_dotenv
 
 # 加载 .env 文件
 load_dotenv()
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
-from .database import fetch_sample_data
-from .routes.annotations import router as annotations_router
-from .routes.documents import router as documents_router
-from .routes.projects import router as projects_router
-from .routes.users import router as users_router
-from .routes.ai import router as ai_router
+from .database import fetch_sample_data  # noqa: E402
+from .routes.annotations import router as annotations_router  # noqa: E402
+from .routes.documents import router as documents_router  # noqa: E402
+from .routes.projects import router as projects_router  # noqa: E402
+from .routes.users import router as users_router  # noqa: E402
+from .routes.ai import router as ai_router  # noqa: E402
 
 
 app = FastAPI(title="AncientChinese Backend")
