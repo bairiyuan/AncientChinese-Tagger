@@ -48,7 +48,7 @@
    DB_HOST=121.196.168.115
    DB_PORT=3306
    DB_USER=root
-   DB_PASSWORD=Ancient10086.
+   DB_PASSWORD=your_real_password_here
    DB_NAME=ancient
 
    # 安全配置
