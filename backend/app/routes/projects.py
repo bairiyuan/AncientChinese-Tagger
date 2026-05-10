@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.dependencies.auth import get_current_user
+from app.models.user import User
 from app.services import projects_service
 
 try:
@@ -62,8 +64,9 @@ async def list_projects(
     page: int = Query(1, ge=1, description="页码"),
     pageSize: int = Query(10, ge=1, le=100, description="每页数量"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    result = projects_service.list_projects(db=db, owner_id=ownerId)
+    result = projects_service.list_projects(db=db, owner_id=ownerId, current_user_id=current_user.id)
     items = [_to_api_project(item) for item in result.get("data", [])]
 
     total = len(items)
@@ -83,12 +86,12 @@ async def list_projects(
 
 
 @router.post("", status_code=201)
-async def create_project(body: ProjectCreate, db: Session = Depends(get_db)):
+async def create_project(body: ProjectCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = projects_service.create_project(
         db=db,
         name=body.name,
         description=body.description,
-        owner_id=body.ownerId,
+        owner_id=current_user.id,
     )
     return _success(
         code=result.get("code", 0),
@@ -98,8 +101,8 @@ async def create_project(body: ProjectCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/{projectId}")
-async def get_project(projectId: int, db: Session = Depends(get_db)):
-    result = projects_service.get_project_by_id(db=db, project_id=projectId)
+async def get_project(projectId: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    result = projects_service.get_project_by_id(db=db, project_id=projectId, current_user_id=current_user.id)
     return _success(
         code=result.get("code", 0),
         message=result.get("message", "success"),
@@ -108,13 +111,14 @@ async def get_project(projectId: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{projectId}")
-async def update_project(projectId: int, body: ProjectUpdate, db: Session = Depends(get_db)):
+async def update_project(projectId: int, body: ProjectUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = projects_service.update_project(
         db=db,
         project_id=projectId,
         name=body.name,
         description=body.description,
         owner_id=body.ownerId,
+        current_user_id=current_user.id,
     )
     return _success(
         code=result.get("code", 0),
@@ -124,13 +128,14 @@ async def update_project(projectId: int, body: ProjectUpdate, db: Session = Depe
 
 
 @router.patch("/{projectId}")
-async def patch_project(projectId: int, body: ProjectPatch, db: Session = Depends(get_db)):
+async def patch_project(projectId: int, body: ProjectPatch, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = projects_service.patch_project(
         db=db,
         project_id=projectId,
         name=body.name,
         description=body.description,
         owner_id=body.ownerId,
+        current_user_id=current_user.id,
     )
     return _success(
         code=result.get("code", 0),
@@ -140,8 +145,8 @@ async def patch_project(projectId: int, body: ProjectPatch, db: Session = Depend
 
 
 @router.delete("/{projectId}")
-async def delete_project(projectId: int, db: Session = Depends(get_db)):
-    result = projects_service.delete_project(db=db, project_id=projectId)
+async def delete_project(projectId: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    result = projects_service.delete_project(db=db, project_id=projectId, current_user_id=current_user.id)
     return _success(
         code=result.get("code", 0),
         message=result.get("message", "success"),

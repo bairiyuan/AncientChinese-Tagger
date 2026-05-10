@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models.annotation import Annotation
 from app.models.document import Document
+from app.models.project import Project
 
 
 ALLOWED_ENTITY_TYPES = {"person", "location", "time", "other"}
@@ -42,6 +43,27 @@ def _validate_span(start_pos: int, end_pos: int) -> None:
         raise HTTPException(status_code=400, detail="start_pos/end_pos 参数错误")
 
 
+def _verify_annotation_ownership(db: Session, annotation_id: int, current_user_id: int) -> Annotation:
+    annotation = db.query(Annotation).filter(Annotation.id == annotation_id).first()
+    if not annotation:
+        raise HTTPException(status_code=404, detail="标注不存在")
+    document = db.query(Document).filter(Document.id == annotation.document_id).first()
+    if document:
+        project = db.query(Project).filter(Project.id == document.project_id).first()
+        if project and project.owner_id != current_user_id:
+            raise HTTPException(status_code=403, detail="无权操作该标注")
+    return annotation
+
+
+def _verify_document_access(db: Session, document_id: int, current_user_id: int):
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="文档不存在")
+    project = db.query(Project).filter(Project.id == document.project_id).first()
+    if project and project.owner_id != current_user_id:
+        raise HTTPException(status_code=403, detail="无权操作该文档")
+
+
 def create_annotation(
     db: Session,
     document_id: int,
@@ -49,14 +71,12 @@ def create_annotation(
     entity_type: str,
     start_pos: int,
     end_pos: int,
+    current_user_id: int,
 ):
     if document_id is None or not entity:
         raise HTTPException(status_code=400, detail="请求参数错误")
 
-    # 检查文档是否存在
-    doc = db.query(Document).filter(Document.id == document_id).first()
-    if not doc:
-        raise HTTPException(status_code=404, detail="文档不存在")
+    _verify_document_access(db, document_id, current_user_id)
 
     _validate_entity_type(entity_type)
     _validate_span(start_pos, end_pos)
@@ -82,15 +102,13 @@ def create_annotation(
 def create_annotations_bulk(
     db: Session,
     document_id: int,
-    annotations_data: list
+    annotations_data: list,
+    current_user_id: int,
 ):
     if document_id is None or not annotations_data:
         raise HTTPException(status_code=400, detail="请求参数错误")
 
-    # 检查文档是否存在
-    doc = db.query(Document).filter(Document.id == document_id).first()
-    if not doc:
-        raise HTTPException(status_code=404, detail="文档不存在")
+    _verify_document_access(db, document_id, current_user_id)
 
     now = datetime.utcnow()
     created_annotations = []
@@ -126,17 +144,15 @@ def create_annotations_bulk(
     return _success([_annotation_to_dict(item) for item in created_annotations])
 
 
-def get_annotation_by_id(db: Session, annotation_id: int):
-    annotation = db.query(Annotation).filter(Annotation.id == annotation_id).first()
-    if not annotation:
-        raise HTTPException(status_code=404, detail="标注不存在")
-
+def get_annotation_by_id(db: Session, annotation_id: int, current_user_id: int):
+    annotation = _verify_annotation_ownership(db, annotation_id, current_user_id)
     return _success(_annotation_to_dict(annotation))
 
 
-def list_annotations_by_document(db: Session, document_id: int):
+def list_annotations_by_document(db: Session, document_id: int, current_user_id: int):
     if document_id is None:
         raise HTTPException(status_code=400, detail="请求参数错误")
+    _verify_document_access(db, document_id, current_user_id)
 
     annotations = (
         db.query(Annotation)
@@ -153,15 +169,23 @@ def search_annotations(
     project_id: Optional[int] = None,
     document_id: Optional[int] = None,
     entity_type: Optional[str] = None,
+    current_user_id: Optional[int] = None,
 ):
-    query = db.query(Annotation)
+    query = db.query(Annotation).join(Document, Annotation.document_id == Document.id).join(Project, Document.project_id == Project.id)
+
+    if current_user_id is not None:
+        query = query.filter(Project.owner_id == current_user_id)
 
     if project_id is not None:
-        query = query.join(Document, Annotation.document_id == Document.id).filter(
-            Document.project_id == project_id
-        )
+        project = db.query(Project).filter(Project.id == project_id).first()
+        if not project:
+            raise HTTPException(status_code=404, detail="项目不存在")
+        if current_user_id is not None and project.owner_id != current_user_id:
+            raise HTTPException(status_code=403, detail="无权操作该项目")
+        query = query.filter(Document.project_id == project_id)
 
     if document_id is not None:
+        _verify_document_access(db, document_id, current_user_id)
         query = query.filter(Annotation.document_id == document_id)
 
     if entity_type is not None:
@@ -179,6 +203,7 @@ def update_annotation(
     entity_type: str,
     start_pos: int,
     end_pos: int,
+    current_user_id: int,
 ):
     if not entity:
         raise HTTPException(status_code=400, detail="请求参数错误")
@@ -186,9 +211,7 @@ def update_annotation(
     _validate_entity_type(entity_type)
     _validate_span(start_pos, end_pos)
 
-    annotation = db.query(Annotation).filter(Annotation.id == annotation_id).first()
-    if not annotation:
-        raise HTTPException(status_code=404, detail="标注不存在")
+    annotation = _verify_annotation_ownership(db, annotation_id, current_user_id)
 
     annotation.entity = entity
     annotation.entity_type = entity_type
@@ -205,6 +228,7 @@ def update_annotation(
 def patch_annotation(
     db: Session,
     annotation_id: int,
+    current_user_id: int,
     entity: Optional[str] = None,
     entity_type: Optional[str] = None,
     start_pos: Optional[int] = None,
@@ -213,9 +237,7 @@ def patch_annotation(
     if entity is None and entity_type is None and start_pos is None and end_pos is None:
         raise HTTPException(status_code=400, detail="至少提供一个可更新字段")
 
-    annotation = db.query(Annotation).filter(Annotation.id == annotation_id).first()
-    if not annotation:
-        raise HTTPException(status_code=404, detail="标注不存在")
+    annotation = _verify_annotation_ownership(db, annotation_id, current_user_id)
 
     if entity is not None:
         if not entity:
@@ -244,10 +266,8 @@ def patch_annotation(
     return _success(_annotation_to_dict(annotation))
 
 
-def delete_annotation(db: Session, annotation_id: int):
-    annotation = db.query(Annotation).filter(Annotation.id == annotation_id).first()
-    if not annotation:
-        raise HTTPException(status_code=404, detail="标注不存在")
+def delete_annotation(db: Session, annotation_id: int, current_user_id: int):
+    annotation = _verify_annotation_ownership(db, annotation_id, current_user_id)
 
     db.delete(annotation)
     db.commit()

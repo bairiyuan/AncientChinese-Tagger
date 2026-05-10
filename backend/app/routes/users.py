@@ -53,8 +53,7 @@ async def list_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _ = current_user
-    result = users_service.list_users(db=db, page=page, page_size=pageSize)
+    result = users_service.list_users(db=db, page=page, page_size=pageSize, current_user_id=current_user.id)
     return _success(result)
 
 
@@ -88,8 +87,7 @@ async def get_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _ = current_user
-    result = users_service.get_user_by_id(db=db, user_id=userId)
+    result = users_service.get_user_by_id(db=db, user_id=userId, current_user_id=current_user.id)
     return _success(result)
 
 
@@ -100,12 +98,12 @@ async def update_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _ = current_user
     result = users_service.update_user(
         db=db,
         user_id=userId,
         username=body.username,
         password=body.password,
+        current_user_id=current_user.id,
     )
     return _success(result)
 
@@ -117,12 +115,12 @@ async def patch_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _ = current_user
     result = users_service.patch_user(
         db=db,
         user_id=userId,
         username=body.username,
         password=body.password,
+        current_user_id=current_user.id,
     )
     return _success(result)
 
@@ -133,6 +131,5 @@ async def delete_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _ = current_user
-    result = users_service.delete_user(db=db, user_id=userId)
+    result = users_service.delete_user(db=db, user_id=userId, current_user_id=current_user.id)
     return _success(result)

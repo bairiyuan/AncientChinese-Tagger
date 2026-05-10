@@ -141,10 +141,11 @@ def test_export_document_not_found(client, auth_headers) -> None:
     assert resp.status_code == 404
 
 
-def test_xunzi_generate(client) -> None:
+def test_xunzi_generate(client, auth_headers) -> None:
     resp = client.post(
         "/api/documents/xunzi/generate",
         json={"text": "测试文本"},
+        headers=auth_headers,
     )
     assert resp.status_code == 200
     body = resp.json()
