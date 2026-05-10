@@ -89,13 +89,17 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ### 3.2 环境变量设置
 
-前端需要知道后端的 API 地址。在 `frontend` 目录下创建 `.env.local` 文件：
+前端需要知道后端的 API 地址。在 `frontend` 目录下创建 `.env.local` 文件（此文件已被 `.gitignore` 忽略）。
+
+**配置内容：**
 
 ```env
 # 关闭 Mock 模式，连接真实后端
 VITE_USE_MOCK=false
 VITE_API_BASE_URL=http://127.0.0.1:8000
 ```
+
+> **注意**：请务必确保文件名准确为 `.env.local`。Vite 会优先加载该文件中的变量。
 
 ### 3.3 启动服务
 
