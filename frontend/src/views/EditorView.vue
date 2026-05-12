@@ -1228,7 +1228,35 @@ onMounted(() => {
   border-radius: var(--radius-md);
   background: var(--paper);
   padding: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+  flex: 1; /* 占据可用空间 */
+}
+
+.ai-chat-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--edge);
+  display: flex;
+  flex-direction: column;
+  height: 550px; /* 给一个固定高度或更大的空间 */
+}
+
+.quick-questions {
+  margin-bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.quick-questions span {
+  font-size: 12px;
+  color: var(--ink-soft);
+  width: 100%;
+  margin-bottom: 4px;
 }
 
 .ai-message {

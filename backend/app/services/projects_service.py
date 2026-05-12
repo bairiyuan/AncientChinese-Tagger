@@ -86,10 +86,10 @@ def list_projects(db: Session, owner_id: Optional[int] = None, current_user_id: 
     query = db.query(Project)
     if owner_id is not None:
         query = query.filter(Project.owner_id == owner_id)
-    elif current_user_id is not None:
-        query = query.filter(Project.owner_id == current_user_id)
+    # 移除强制按当前用户过滤的逻辑，允许查看所有项目
+    # 如果未来需要实现私有项目，可以在这里添加权限检查
 
-    projects = query.order_by(Project.id).all()
+    projects = query.order_by(Project.id.desc()).all()
     return _success([_project_to_dict(project) for project in projects])
 
 
