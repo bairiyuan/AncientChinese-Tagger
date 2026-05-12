@@ -1,7 +1,12 @@
+import os
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
+
+# 设置测试环境变量
+os.environ["JWT_SECRET"] = "test-jwt-secret-for-testing-only"
+os.environ["DEEPSEEK_API_KEY"] = "test-deepseek-key-for-testing-only"
 
 from app.main import app
 from app.database import get_db

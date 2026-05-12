@@ -1,0 +1,50 @@
+# CI/CD 配置贡献说明
+
+姓名：张贤文  
+学号：2312190210
+角色：CI/CD（主导）  
+
+## 完成的工作
+
+### 工作流相关
+- [x] 将原有 test workflow 迁移/升级为 `.github/workflows/ci.yml`
+- [x] 配置后端与前端两个 job 并行运行（backend / frontend）
+- [x] 配置 CI 触发条件：push 到 `main`、`develop`，以及 PR 触发
+- [x] 后端增加 Lint 检查：`ruff check backend`（Python 3.12）
+- [x] 前端增加 Lint 检查：`npx eslint . --max-warnings=0`（Node 20）
+- [x] 保持测试正常运行：后端 `pytest`、前端 `npm run test:coverage`
+- [x] 保持覆盖率上传 Codecov：backend/frontend 分开上传并分别设置 flag（`backend` / `frontend`）
+
+### 代码适配
+- [x] 后端适配 CI 环境：CI 不依赖本地数据库，通过环境变量与测试依赖覆盖（SQLite）保证测试可运行
+- [x] 前端适配 CI 环境：确保 lint 与测试命令在非交互式 CI 中可直接运行并生成覆盖率文件
+- [x] 覆盖率文件路径正确：
+  - 后端：`backend/coverage.xml`
+  - 前端：`frontend/coverage/lcov.info`
+- [x] README 顶部添加徽章：CI 状态 + Codecov backend/frontend 覆盖率（当前展示 `develop` 分支）
+
+### 可选项
+- [ ] 配置 Dependabot 自动更新依赖
+- [ ] 集成 CodeRabbit AI 代码审查
+- [ ] 使用 act 在本地验证 GitHub Actions 工作流
+- [ ] 添加构建矩阵（多 Python / 多 Node 版本）
+
+## PR 链接
+- PR #X：<我提供链接>
+
+## CI 运行链接
+- Actions Run：<我提供链接>
+
+## 遇到的问题和解决
+1. 问题：前端 CI 运行 `eslint` 时出现 `Unexpected any`（`no-explicit-any`）导致 job 失败。  
+   解决：将测试代码中 `(doc as any)` 改为显式类型断言（`Document & { annotations?: Annotation[] }`），并补充类型 import，使 ESLint 规则通过。
+
+2. 问题：CI 环境没有本地数据库/生产数据库连接不可用，后端在导入或运行测试时可能因为 DB 配置缺失而失败。  
+   解决：在 CI 中注入必要的 DB 环境变量避免配置缺失报错；同时测试侧通过依赖覆盖使用 SQLite（in-memory）执行，确保测试不依赖外部数据库服务。
+
+## 心得体会
+这次 CI/CD 配置让我更直观地体会到“自动化质量门禁”的价值：每次 push/PR 都能自动跑 lint、测试与覆盖率，能在合并前尽早发现问题并减少返工。  
+Lint（ruff/eslint）能把一些低级错误和风格问题在提交阶段就拦截住，提高团队协作效率。  
+覆盖率上传到 Codecov 并按 backend/frontend 分开 flag 展示，能更清晰地定位覆盖率短板，避免“只看整体但不知道哪里缺”的情况。  
+在多人协作上，通过 PR Review 让工作流配置更容易被发现问题（例如命令、路径、CI 环境差异），也促使我在提交前做更完整的本地验证。  
+整体而言，CI 不只是“跑一遍测试”，而是把可重复的检查固化为流程，为后续迭代提供稳定的工程保障。

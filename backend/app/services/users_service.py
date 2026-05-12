@@ -10,9 +10,12 @@ from sqlalchemy.orm import Session
 from app.models.user import User
 
 
-JWT_SECRET = os.getenv("JWT_SECRET", "replace-with-env-secret")
+JWT_SECRET = os.getenv("JWT_SECRET")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))
+
+if not JWT_SECRET:
+    raise RuntimeError("JWT_SECRET environment variable is not set")
 
 
 def _success(data: Any) -> Dict[str, Any]:
@@ -27,7 +30,6 @@ def _user_to_dict(user: User) -> Dict[str, Any]:
     return {
         "id": user.id,
         "username": user.username,
-        "password": user.password,
         "created_at": user.created_at.isoformat() if user.created_at else None,
         "updated_at": user.updated_at.isoformat() if user.updated_at else None,
     }
@@ -109,19 +111,30 @@ def login_user(db: Session, username: str, password: str):
     )
 
 
-def get_user_by_id(db: Session, user_id: int):
+def _verify_user_access(current_user_id: int, target_user_id: int):
+    if current_user_id != target_user_id:
+        raise HTTPException(status_code=403, detail="无权操作该用户")
+
+
+def get_user_by_id(db: Session, user_id: int, current_user_id: Optional[int] = None):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
+    if current_user_id is not None and current_user_id != user_id:
+        raise HTTPException(status_code=403, detail="无权查看该用户")
 
     return _success(_user_to_dict(user))
 
 
-def list_users(db: Session, page: int, page_size: int):
+def list_users(db: Session, page: int, page_size: int, current_user_id: Optional[int] = None):
     if page < 1 or page_size < 1:
         raise HTTPException(status_code=400, detail="分页参数错误")
 
-    query = db.query(User)
+    # 只允许查看自己的信息
+    if current_user_id is not None:
+        query = db.query(User).filter(User.id == current_user_id)
+    else:
+        query = db.query(User)
     total = query.count()
 
     items = (
@@ -139,10 +152,11 @@ def list_users(db: Session, page: int, page_size: int):
     )
 
 
-def update_user(db: Session, user_id: int, username: str, password: str):
+def update_user(db: Session, user_id: int, username: str, password: str, current_user_id: int):
     if not username or not password:
         raise HTTPException(status_code=400, detail="用户名和密码不能为空")
 
+    _verify_user_access(current_user_id, user_id)
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
@@ -165,10 +179,11 @@ def update_user(db: Session, user_id: int, username: str, password: str):
     return _success(_user_to_dict(user))
 
 
-def patch_user(db: Session, user_id: int, username: Optional[str] = None, password: Optional[str] = None):
+def patch_user(db: Session, user_id: int, current_user_id: int, username: Optional[str] = None, password: Optional[str] = None):
     if username is None and password is None:
         raise HTTPException(status_code=400, detail="至少提供一个可更新字段")
 
+    _verify_user_access(current_user_id, user_id)
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
@@ -198,7 +213,8 @@ def patch_user(db: Session, user_id: int, username: Optional[str] = None, passwo
     return _success(_user_to_dict(user))
 
 
-def delete_user(db: Session, user_id: int):
+def delete_user(db: Session, user_id: int, current_user_id: int):
+    _verify_user_access(current_user_id, user_id)
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")

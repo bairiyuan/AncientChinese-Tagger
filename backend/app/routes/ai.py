@@ -2,6 +2,8 @@ from typing import List, Optional, Dict
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from app.dependencies.auth import get_current_user
+from app.models.user import User
 from app.services import llm_service
 from app.utils.text_segmentation import segment_text_with_jieba_pos
 
@@ -20,24 +22,28 @@ class ChatRequest(BaseModel):
     history: Optional[List[Dict[str, str]]] = None
 
 @router.post("/analyze")
-async def analyze_text(body: AnalysisRequest):
+async def analyze_text(body: AnalysisRequest, current_user: User = Depends(get_current_user)):
+    _ = current_user
     result = llm_service.analyze_ancient_text(body.text)
     if "error" in result:
         raise HTTPException(status_code=500, detail=result["error"])
     return {"code": 0, "message": "success", "data": result}
 
 @router.post("/chat")
-async def ai_chat(body: ChatRequest):
+async def ai_chat(body: ChatRequest, current_user: User = Depends(get_current_user)):
+    _ = current_user
     answer = llm_service.chat_with_ai(body.text, body.question, body.history)
     return {"code": 0, "message": "success", "data": answer}
 
 @router.post("/auto-annotate")
-async def auto_annotate(body: AnalysisRequest):
+async def auto_annotate(body: AnalysisRequest, current_user: User = Depends(get_current_user)):
+    _ = current_user
     result = llm_service.auto_annotate_text(body.text)
     return {"code": 0, "message": "success", "data": result}
 
 @router.post("/tokenize")
-async def tokenize_text(body: AnalysisRequest):
+async def tokenize_text(body: AnalysisRequest, current_user: User = Depends(get_current_user)):
+    _ = current_user
     try:
         # 优先尝试使用 DeepSeek
         result = llm_service.tokenize_ancient_text(body.text)

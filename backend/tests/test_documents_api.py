@@ -1,4 +1,5 @@
 import pytest
+from urllib.parse import unquote
 
 def _create_project(client, name: str, owner_id: int, headers: dict) -> int:
     resp = client.post(
@@ -95,3 +96,58 @@ def test_patch_without_fields_should_fail(client, test_user, auth_headers) -> No
     resp = client.patch(f"/api/documents/{created['id']}", json={}, headers=auth_headers)
     assert resp.status_code == 400
     assert "至少提供一个" in resp.json()["detail"]
+
+
+def test_import_document_txt(client, test_user, auth_headers) -> None:
+    project_id = _create_project(client, "项目A", test_user["id"], auth_headers)
+    
+    txt_content = "项羽名籍"
+    resp = client.post(
+        f"/api/projects/{project_id}/documents/import",
+        files={"file": ("test.txt", txt_content.encode("utf-8"), "text/plain")},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["code"] == 0
+    assert body["data"]["content"] == txt_content
+
+
+def test_import_document_invalid_file(client, test_user, auth_headers) -> None:
+    project_id = _create_project(client, "项目A", test_user["id"], auth_headers)
+    
+    resp = client.post(
+        f"/api/projects/{project_id}/documents/import",
+        files={"file": ("test.pdf", b"invalid content", "application/pdf")},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 400
+    assert "仅支持 txt 文件导入" in resp.json()["detail"]
+
+
+def test_export_document(client, test_user, auth_headers) -> None:
+    project_id = _create_project(client, "项目A", test_user["id"], auth_headers)
+    created = _create_document(client, project_id, "导出测试文档", "项羽名籍", auth_headers)
+    
+    resp = client.get(f"/api/documents/{created['id']}/export", headers=auth_headers)
+    assert resp.status_code == 200
+    assert "application/json" in resp.headers["content-type"]
+    content_disposition = unquote(resp.headers["content-disposition"])
+    assert "导出测试文档.json" in content_disposition
+
+
+def test_export_document_not_found(client, auth_headers) -> None:
+    resp = client.get("/api/documents/999/export", headers=auth_headers)
+    assert resp.status_code == 404
+
+
+def test_xunzi_generate(client, auth_headers) -> None:
+    resp = client.post(
+        "/api/documents/xunzi/generate",
+        json={"text": "测试文本"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["code"] == 0
+    assert "result" in body["data"]
