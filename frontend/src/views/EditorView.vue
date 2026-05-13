@@ -419,30 +419,34 @@ const askTokenizeQuestionWith = (q: string) => {
 
 const askTokenizeQuestion = async () => {
   const q = tokenizeQuestion.value.trim()
-  if (!q) return
+  if (!q || !document.value) return
 
   tokenizeMessages.value.push({ type: 'user', text: q })
   tokenizeQuestion.value = ''
   isTokenizingLoading.value = true
 
   try {
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    const history = tokenizeMessages.value.slice(0, -1).map(m => ({
+      role: m.type === 'user' ? 'user' : 'assistant',
+      content: m.text
+    }))
 
-    let answer = ''
-    if (q.includes('词性')) {
-      answer = '词性标注说明：\n\n• **名**：名词，表示人、事物、地点\n• **动**：动词，表示动作或状态变化\n• **形**：形容词，表示性质或状态\n• **代**：代词，代替名词或其他词\n• **副**：副词，修饰动词或形容词\n• **介**：介词，引出对象或方式\n• **连**：连词，连接词语或句子\n• **助**：助词，帮助表达语气'
-    } else if (q.includes('搭配')) {
-      answer = '词语搭配分析：\n\n古文中常见的词语搭配包括：\n\n• 主谓搭配：主语+谓语动词\n• 动宾搭配：动词+宾语\n• 偏正搭配：修饰语+中心语\n• 联合搭配：并列词语组合\n\n这些搭配关系对于理解句意至关重要。'
-    } else if (q.includes('分词') || q.includes('依据')) {
-      answer = '分词依据说明：\n\n1. **语义完整性**：每个词应表达相对完整的意义\n2. **语法功能**：考虑词在句中的语法作用\n3. **语境关联**：结合上下文确定词语边界\n4. **传统习惯**：参考权威辞书和专家注疏'
-    } else {
-      answer = tokenizeResult.value.length > 0
-        ? `当前分词结果显示，共有 ${tokenizeResult.value.length} 个词单元。主要涉及名词、动词、形容词等词性，具体词性标注已在上方展示。`
-        : '请先点击"开始分词"按钮进行分析，再针对具体内容提问。'
-    }
+    const answer = await aiApi.aiChat({
+      text: document.value.content || '',
+      question: q,
+      history
+    })
 
     tokenizeMessages.value.push({ type: 'ai', text: answer })
-  } catch {
+    // 自动滚动到底部
+    nextTick(() => {
+      const sidebar = window.document.querySelector<HTMLElement>('.editor-sidebar')
+      if (sidebar) {
+        sidebar.scrollTop = sidebar.scrollHeight
+      }
+    })
+  } catch (error) {
+    console.error('Tokenize Q&A failed:', error)
     tokenizeMessages.value.push({ type: 'ai', text: '抱歉，暂时无法回答这个问题。' })
   } finally {
     isTokenizingLoading.value = false
