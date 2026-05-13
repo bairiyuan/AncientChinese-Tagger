@@ -36,8 +36,15 @@ def analyze_ancient_text(text: str) -> Dict[str, Any]:
         "{\n"
         "  \"sentence\": \"对原文的简要断句或重复原文\",\n"
         "  \"grammar\": \"文中涉及的重要语法结构分析\",\n"
-        "  \"meaning\": \"整段文字的现代汉语翻译\"\n"
+        "  \"meaning\": \"整段文字的现代汉语翻译\",\n"
+        "  \"segments\": [\n"
+        "    {\"text\": \"原文中的字或词组\", \"explanation\": \"该字词在当前语境下的意思\"}\n"
+        "  ]\n"
         "}\n"
+        "要求：\n"
+        "1. segments 必须严格按照原文顺序切分，拼接后应与原文一致，不得遗漏内容。\n"
+        "2. 优先按有意义的词组切分，必要时可细到单字；标点符号也要保留，可将 explanation 设为空字符串。\n"
+        "3. meaning 必须是整篇文章的完整现代汉语翻译。\n"
         "注意：你的回答必须仅包含该JSON对象，不要有任何其他解释。严格基于提供的文本，不要引用外部无关信息。"
     )
     
@@ -130,8 +137,8 @@ def tokenize_ancient_text(text: str) -> List[Dict[str, str]]:
     ]
     
     try:
-        # 设置较短的超时时间，例如 10 秒，以便快速触发降级
-        response_text = call_deepseek(messages, temperature=0.1, timeout=10)
+        # 设置较长的超时时间，例如 30 秒，确保 DeepSeek 能够完成复杂的古文分词
+        response_text = call_deepseek(messages, temperature=0.1, timeout=30)
         start = response_text.find('[')
         end = response_text.rfind(']') + 1
         if start != -1 and end != 0:
@@ -140,4 +147,3 @@ def tokenize_ancient_text(text: str) -> List[Dict[str, str]]:
     except Exception as e:
         print(f"DeepSeek tokenization failed or timed out: {e}")
         raise e
-

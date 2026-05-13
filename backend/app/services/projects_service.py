@@ -68,17 +68,17 @@ def create_project(db: Session, name: str, description: str, owner_id: int):
     return _success(_project_to_dict(project))
 
 
-def _verify_project_ownership(db: Session, project_id: int, current_user_id: int) -> Project:
+def _verify_project_ownership(db: Session, project_id: int, current_user_id: int, readonly: bool = False) -> Project:
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="项目不存在")
-    if project.owner_id != current_user_id:
+    if not readonly and project.owner_id != current_user_id:
         raise HTTPException(status_code=403, detail="无权操作该项目")
     return project
 
 
 def get_project_by_id(db: Session, project_id: int, current_user_id: int):
-    project = _verify_project_ownership(db, project_id, current_user_id)
+    project = _verify_project_ownership(db, project_id, current_user_id, readonly=True)
     return _success(_project_to_dict(project))
 
 
@@ -86,10 +86,10 @@ def list_projects(db: Session, owner_id: Optional[int] = None, current_user_id: 
     query = db.query(Project)
     if owner_id is not None:
         query = query.filter(Project.owner_id == owner_id)
-    elif current_user_id is not None:
-        query = query.filter(Project.owner_id == current_user_id)
+    # 移除强制按当前用户过滤的逻辑，允许查看所有项目
+    # 如果未来需要实现私有项目，可以在这里添加权限检查
 
-    projects = query.order_by(Project.id).all()
+    projects = query.order_by(Project.id.desc()).all()
     return _success([_project_to_dict(project) for project in projects])
 
 

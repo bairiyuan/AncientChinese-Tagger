@@ -3,6 +3,7 @@ import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { mockApi } from '@/api/mock'
 import { aiApi } from '@/api'
+import type { AnalysisResult } from '@/api/ai'
 import type { Document, Annotation, EntityType } from '@/api/types'
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
@@ -25,6 +26,16 @@ const documentId = computed(() => Number(route.params.documentId))
 
 type DocumentWithAnnotations = Document & { annotations?: Annotation[] }
 
+type HighlightSegment =
+  | { key: string; kind: 'plain'; text: string }
+  | {
+      key: string
+      kind: 'annotation' | 'match'
+      text: string
+      color: string
+      label: string
+    }
+
 const document = ref<Document | null>(null)
 const annotations = ref<Annotation[]>([])
 const sortedAnnotations = computed(() => {
@@ -32,6 +43,7 @@ const sortedAnnotations = computed(() => {
 })
 const isLoading = ref(true)
 const activeTab = ref('annotation')
+const showRawEditor = ref(false)
 const isAnnotating = ref(false)
 const selectedEntityType = ref<string>('person')
 const newAnnotationText = ref('')
@@ -56,7 +68,7 @@ const askAiQuestionWith = (q: string) => {
 
 // 古文解析相关状态
 const isParsing = ref(false)
-const parsedResult = ref<{ sentence: string; grammar: string; meaning: string } | null>(null)
+const parsedResult = ref<AnalysisResult | null>(null)
 const parsingQuestion = ref('')
 const parsingMessages = ref<{ type: 'user' | 'ai'; text: string }[]>([])
 const isParsingLoading = ref(false)
@@ -114,6 +126,103 @@ const saveEntityTypes = () => {
 const getEntityTypeInfo = (type: string) => {
   return entityTypes.value.find(t => t.value === type) || { label: type, color: '#95a5a6' }
 }
+
+const hexToRgba = (hex: string, alpha: number) => {
+  const normalized = hex.replace('#', '')
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) {
+    return `rgba(149, 165, 166, ${alpha})`
+  }
+
+  const value = Number.parseInt(normalized, 16)
+  const r = (value >> 16) & 255
+  const g = (value >> 8) & 255
+  const b = value & 255
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+const selectedEntityTypeInfo = computed(() => getEntityTypeInfo(selectedEntityType.value))
+
+const annotationTextSegments = computed<HighlightSegment[]>(() => {
+  const content = document.value?.content || ''
+  if (!content) return []
+
+  const regions = [
+    ...annotations.value
+      .filter(
+        ann =>
+          ann.startPos !== null &&
+          ann.endPos !== null &&
+          ann.startPos >= 0 &&
+          ann.endPos > ann.startPos &&
+          ann.endPos <= content.length,
+      )
+      .map(ann => {
+        const info = getEntityTypeInfo(ann.entityType)
+        return {
+          start: ann.startPos as number,
+          end: ann.endPos as number,
+          kind: 'annotation' as const,
+          color: info.color,
+          label: info.label,
+        }
+      }),
+    ...matchPositions.value
+      .filter(pos => pos.start >= 0 && pos.end > pos.start && pos.end <= content.length)
+      .map(pos => ({
+        start: pos.start,
+        end: pos.end,
+        kind: 'match' as const,
+        color: selectedEntityTypeInfo.value.color,
+        label: `待添加${selectedEntityTypeInfo.value.label}`,
+      })),
+  ].sort((a, b) => {
+    if (a.start !== b.start) return a.start - b.start
+    if (a.kind !== b.kind) return a.kind === 'annotation' ? -1 : 1
+    return b.end - a.end
+  })
+
+  const segments: HighlightSegment[] = []
+  let cursor = 0
+
+  regions.forEach((region, index) => {
+    if (region.start < cursor) return
+
+    if (region.start > cursor) {
+      segments.push({
+        key: `plain-${cursor}-${region.start}`,
+        kind: 'plain',
+        text: content.slice(cursor, region.start),
+      })
+    }
+
+    segments.push({
+      key: `${region.kind}-${index}-${region.start}-${region.end}`,
+      kind: region.kind,
+      text: content.slice(region.start, region.end),
+      color: region.color,
+      label: region.label,
+    })
+    cursor = region.end
+  })
+
+  if (cursor < content.length) {
+    segments.push({
+      key: `plain-${cursor}-${content.length}`,
+      kind: 'plain',
+      text: content.slice(cursor),
+    })
+  }
+
+  return segments
+})
+
+const tokenizedWords = computed(() => {
+  return tokenizeResult.value.filter(token => token.word.trim().length > 0)
+})
+
+const parsingSegments = computed(() => {
+  return (parsedResult.value?.segments || []).filter(segment => segment.text.length > 0)
+})
 
 // 内联添加实体类型
 const showAddType = ref(false)
@@ -419,30 +528,34 @@ const askTokenizeQuestionWith = (q: string) => {
 
 const askTokenizeQuestion = async () => {
   const q = tokenizeQuestion.value.trim()
-  if (!q) return
+  if (!q || !document.value) return
 
   tokenizeMessages.value.push({ type: 'user', text: q })
   tokenizeQuestion.value = ''
   isTokenizingLoading.value = true
 
   try {
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    const history = tokenizeMessages.value.slice(0, -1).map(m => ({
+      role: m.type === 'user' ? 'user' : 'assistant',
+      content: m.text
+    }))
 
-    let answer = ''
-    if (q.includes('词性')) {
-      answer = '词性标注说明：\n\n• **名**：名词，表示人、事物、地点\n• **动**：动词，表示动作或状态变化\n• **形**：形容词，表示性质或状态\n• **代**：代词，代替名词或其他词\n• **副**：副词，修饰动词或形容词\n• **介**：介词，引出对象或方式\n• **连**：连词，连接词语或句子\n• **助**：助词，帮助表达语气'
-    } else if (q.includes('搭配')) {
-      answer = '词语搭配分析：\n\n古文中常见的词语搭配包括：\n\n• 主谓搭配：主语+谓语动词\n• 动宾搭配：动词+宾语\n• 偏正搭配：修饰语+中心语\n• 联合搭配：并列词语组合\n\n这些搭配关系对于理解句意至关重要。'
-    } else if (q.includes('分词') || q.includes('依据')) {
-      answer = '分词依据说明：\n\n1. **语义完整性**：每个词应表达相对完整的意义\n2. **语法功能**：考虑词在句中的语法作用\n3. **语境关联**：结合上下文确定词语边界\n4. **传统习惯**：参考权威辞书和专家注疏'
-    } else {
-      answer = tokenizeResult.value.length > 0
-        ? `当前分词结果显示，共有 ${tokenizeResult.value.length} 个词单元。主要涉及名词、动词、形容词等词性，具体词性标注已在上方展示。`
-        : '请先点击"开始分词"按钮进行分析，再针对具体内容提问。'
-    }
+    const answer = await aiApi.aiChat({
+      text: document.value.content || '',
+      question: q,
+      history
+    })
 
     tokenizeMessages.value.push({ type: 'ai', text: answer })
-  } catch {
+    // 自动滚动到底部
+    nextTick(() => {
+      const sidebar = window.document.querySelector<HTMLElement>('.editor-sidebar')
+      if (sidebar) {
+        sidebar.scrollTop = sidebar.scrollHeight
+      }
+    })
+  } catch (error) {
+    console.error('Tokenize Q&A failed:', error)
     tokenizeMessages.value.push({ type: 'ai', text: '抱歉，暂时无法回答这个问题。' })
   } finally {
     isTokenizingLoading.value = false
@@ -518,14 +631,146 @@ onMounted(() => {
 
             <!-- 文本编辑区 -->
             <div class="text-editor">
-              <textarea
-                v-model="document!.content"
-                class="text-area"
-                placeholder="请输入或粘贴古文内容..."
-              ></textarea>
-              <div class="text-hint">
-                <span>在右侧选择功能进行实体标注、古文解析或自动分词</span>
-              </div>
+              <template v-if="activeTab === 'annotation'">
+                <div class="annotated-reader">
+                  <div class="annotated-reader-header">
+                    <div>
+                      <h4>正文高亮预览</h4>
+                      <p>左侧直接显示实体颜色，便于快速核对标注位置</p>
+                    </div>
+                    <button class="btn ghost small" @click="showRawEditor = !showRawEditor">
+                      {{ showRawEditor ? '收起原文编辑' : '编辑原文' }}
+                    </button>
+                  </div>
+
+                  <div v-if="annotationTextSegments.length > 0" class="annotated-content">
+                    <template v-for="segment in annotationTextSegments" :key="segment.key">
+                      <span v-if="segment.kind === 'plain'" class="annotated-plain">{{ segment.text }}</span>
+                      <span
+                        v-else
+                        :class="[
+                          'annotated-mark',
+                          segment.kind === 'match' ? 'is-pending' : 'is-saved'
+                        ]"
+                        :style="{
+                          backgroundColor: hexToRgba(
+                            segment.color,
+                            segment.kind === 'match' ? 0.28 : 0.18
+                          ),
+                          borderColor: segment.color
+                        }"
+                        :title="segment.label"
+                      >
+                        {{ segment.text }}
+                      </span>
+                    </template>
+                  </div>
+                  <div v-else class="annotated-empty">
+                    暂无正文内容，请先输入或粘贴古文。
+                  </div>
+
+                  <div class="text-hint">
+                    <span>实色高亮为已保存标注，虚线高亮为待确认匹配</span>
+                  </div>
+
+                  <textarea
+                    v-if="showRawEditor"
+                    v-model="document!.content"
+                    class="text-area raw-editor"
+                    placeholder="请输入或粘贴古文内容..."
+                  ></textarea>
+                </div>
+              </template>
+              <template v-else-if="activeTab === 'tokenize'">
+                <div class="annotated-reader">
+                  <div class="annotated-reader-header">
+                    <div>
+                      <h4>分词结果预览</h4>
+                      <p>点击开始分词后，左侧直接按词块展示正文分词结果</p>
+                    </div>
+                    <button class="btn ghost small" @click="showRawEditor = !showRawEditor">
+                      {{ showRawEditor ? '收起原文编辑' : '编辑原文' }}
+                    </button>
+                  </div>
+
+                  <div v-if="tokenizedWords.length > 0" class="tokenized-content">
+                    <span
+                      v-for="(token, index) in tokenizedWords"
+                      :key="`${token.word}-${token.pos}-${index}`"
+                      class="tokenized-inline"
+                    >
+                      <span class="tokenized-word-text">{{ token.word }}</span>
+                      <span class="tokenized-word-pos" :class="token.pos">{{ token.pos }}</span>
+                      <span v-if="index < tokenizedWords.length - 1" class="tokenized-separator">/</span>
+                    </span>
+                  </div>
+                  <div v-else class="annotated-empty">
+                    暂未生成分词结果，请点击右侧“开始分词”。
+                  </div>
+
+                  <div class="text-hint">
+                    <span>左侧展示分词后的词块与词性，方便直接对照原文阅读</span>
+                  </div>
+
+                  <textarea
+                    v-if="showRawEditor"
+                    v-model="document!.content"
+                    class="text-area raw-editor"
+                    placeholder="请输入或粘贴古文内容..."
+                  ></textarea>
+                </div>
+              </template>
+              <template v-else-if="activeTab === 'parsing'">
+                <div class="annotated-reader">
+                  <div class="annotated-reader-header">
+                    <div>
+                      <h4>字词释义预览</h4>
+                      <p>鼠标移到字词上可查看当前语境下的释义</p>
+                    </div>
+                    <button class="btn ghost small" @click="showRawEditor = !showRawEditor">
+                      {{ showRawEditor ? '收起原文编辑' : '编辑原文' }}
+                    </button>
+                  </div>
+
+                  <div v-if="parsingSegments.length > 0" class="parsing-content">
+                    <template v-for="(segment, index) in parsingSegments" :key="`${segment.text}-${index}`">
+                      <span
+                        v-if="segment.explanation"
+                        class="parsing-segment has-tooltip"
+                        tabindex="0"
+                      >
+                        {{ segment.text }}
+                        <span class="parsing-tooltip">{{ segment.explanation }}</span>
+                      </span>
+                      <span v-else class="parsing-segment punctuation">{{ segment.text }}</span>
+                    </template>
+                  </div>
+                  <div v-else class="annotated-empty">
+                    暂未生成字词释义，请点击右侧“开始解析”。
+                  </div>
+
+                  <div class="text-hint">
+                    <span>悬停可查看单个字词解释，右侧显示整篇现代汉语译文</span>
+                  </div>
+
+                  <textarea
+                    v-if="showRawEditor"
+                    v-model="document!.content"
+                    class="text-area raw-editor"
+                    placeholder="请输入或粘贴古文内容..."
+                  ></textarea>
+                </div>
+              </template>
+              <template v-else>
+                <textarea
+                  v-model="document!.content"
+                  class="text-area"
+                  placeholder="请输入或粘贴古文内容..."
+                ></textarea>
+                <div class="text-hint">
+                  <span>在右侧选择功能进行实体标注、古文解析或自动分词</span>
+                </div>
+              </template>
             </div>
           </div>
 
@@ -633,7 +878,7 @@ onMounted(() => {
             </div>
 
             <!-- 古文解析面板 -->
-            <div v-else-if="activeTab === 'parsing'" class="sidebar-panel">
+            <div v-else-if="activeTab === 'parsing'" class="sidebar-panel parsing-panel">
               <h4>古文解析</h4>
               <p class="panel-desc">基于NLP的古文智能断句与语法分析</p>
 
@@ -641,28 +886,20 @@ onMounted(() => {
                 {{ isParsing ? '解析中...' : '开始解析' }}
               </button>
 
-              <div class="parsing-result">
-                <h5>解析结果</h5>
-                <div v-if="parsedResult" class="parsed-analysis">
-                  <div class="analysis-section">
-                    <h6>📖 断句分析</h6>
-                    <p>{{ parsedResult.sentence }}</p>
-                  </div>
-                  <div class="analysis-section">
-                    <h6>📝 语法结构</h6>
-                    <p>{{ parsedResult.grammar }}</p>
-                  </div>
-                  <div class="analysis-section">
-                    <h6>💡 语义解读</h6>
-                    <p>{{ parsedResult.meaning }}</p>
+              <div class="translation-result">
+                <h5>全文译文</h5>
+                <div v-if="parsedResult" class="translation-card">
+                  <p>{{ parsedResult.meaning }}</p>
+                  <div v-if="parsedResult.grammar" class="translation-note">
+                    <strong>语法提示：</strong>{{ parsedResult.grammar }}
                   </div>
                 </div>
                 <div v-else class="no-result">
-                  点击"开始解析"按钮进行古文分析
+                  点击"开始解析"按钮生成全文译文
                 </div>
               </div>
 
-              <div class="ai-chat-section">
+              <div class="ai-chat-section parsing-ai-chat-section">
                 <h5>AI 问答</h5>
                 <div class="ai-messages">
                   <div
@@ -706,7 +943,7 @@ onMounted(() => {
             </div>
 
             <!-- 自动分词面板 -->
-            <div v-else-if="activeTab === 'tokenize'" class="sidebar-panel">
+            <div v-else-if="activeTab === 'tokenize'" class="sidebar-panel tokenize-panel">
               <h4>自动分词</h4>
               <p class="panel-desc">基于NLP的智能分词与词性标注</p>
 
@@ -714,25 +951,7 @@ onMounted(() => {
                 {{ isTokenizing ? '分词中...' : '开始分词' }}
               </button>
 
-              <div class="tokenize-result">
-                <h5>分词结果</h5>
-                <div v-if="tokenizeResult.length > 0" class="token-list">
-                  <span
-                    v-for="(token, index) in tokenizeResult"
-                    :key="index"
-                    class="token-item"
-                    :class="token.pos"
-                  >
-                    {{ token.word }}
-                    <span class="token-pos">{{ token.pos }}</span>
-                  </span>
-                </div>
-                <div v-else class="no-result">
-                  点击"开始分词"按钮进行智能分词
-                </div>
-              </div>
-
-              <div class="ai-chat-section">
+              <div class="ai-chat-section tokenize-ai-chat-section">
                 <h5>AI 问答</h5>
                 <div class="ai-messages">
                   <div
@@ -972,6 +1191,250 @@ onMounted(() => {
   overflow-y: auto; /* 左侧内容超出时滚动 */
 }
 
+.annotated-reader {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100%;
+}
+
+.annotated-reader-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.annotated-reader-header h4 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  color: var(--ink);
+}
+
+.annotated-reader-header p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.annotated-content,
+.annotated-empty {
+  flex: 1;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+  padding: 18px;
+  font-family: var(--font-serif);
+  font-size: 18px;
+  line-height: 2;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.annotated-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-soft);
+  min-height: 280px;
+}
+
+.annotated-mark {
+  border-bottom: 2px solid;
+  border-radius: 6px;
+  padding: 0 2px;
+  transition: box-shadow 0.2s ease;
+}
+
+.annotated-mark.is-saved:hover {
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.04);
+}
+
+.annotated-mark.is-pending {
+  border-bottom-style: dashed;
+}
+
+.parsing-content {
+  flex: 1;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+  padding: 18px;
+  font-family: var(--font-serif);
+  font-size: 20px;
+  line-height: 2.2;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.parsing-segment {
+  position: relative;
+  display: inline;
+}
+
+.parsing-segment.has-tooltip {
+  cursor: help;
+  border-bottom: 1px dashed rgba(74, 124, 38, 0.45);
+}
+
+.parsing-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%);
+  min-width: 120px;
+  max-width: 240px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: rgba(31, 41, 55, 0.96);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: normal;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+  z-index: 8;
+}
+
+.parsing-tooltip::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: rgba(31, 41, 55, 0.96);
+}
+
+.parsing-segment.has-tooltip:hover .parsing-tooltip,
+.parsing-segment.has-tooltip:focus-visible .parsing-tooltip {
+  opacity: 1;
+}
+
+.parsing-segment.punctuation {
+  color: var(--ink-soft);
+}
+
+.tokenized-content {
+  flex: 1;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+  padding: 18px;
+  font-family: var(--font-serif);
+  font-size: 18px;
+  line-height: 2.1;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tokenized-inline {
+  display: inline;
+}
+
+.tokenized-word-text {
+  color: var(--ink);
+}
+
+.tokenized-word-pos {
+  font-size: 12px;
+  color: var(--ink-soft);
+  font-family: var(--font-sans);
+  margin-left: 2px;
+  vertical-align: super;
+}
+
+.tokenized-separator {
+  color: var(--ink-soft);
+  margin: 0 6px;
+}
+
+.tokenized-word-pos.名 { color: #3498db; }
+.tokenized-word-pos.动 { color: #e74c3c; }
+.tokenized-word-pos.形 { color: #2ecc71; }
+.tokenized-word-pos.代 { color: #9b59b6; }
+.tokenized-word-pos.副 { color: #f39c12; }
+.tokenized-word-pos.介 { color: #1abc9c; }
+.tokenized-word-pos.连 { color: #34495e; }
+.tokenized-word-pos.助 { color: #95a5a6; }
+.tokenized-word-pos.叹 { color: #e91e63; }
+.tokenized-word-pos.量 { color: #00bcd4; }
+.tokenized-word-pos.数 { color: #8e44ad; }
+.tokenized-word-pos.语 { color: #16a085; }
+.tokenized-word-pos.拟 { color: #d35400; }
+.tokenized-word-pos.专 { color: #7f8c8d; }
+.tokenized-word-pos.标 { color: #2980b9; }
+.tokenized-word-pos.未知 { color: #7f8c8d; }
+.tokenized-word-pos.other { color: #7f8c8d; }
+
+.tokenize-ai-chat-section {
+  flex: 1;
+  min-height: 620px;
+}
+
+.tokenize-ai-chat-section .ai-messages {
+  max-height: none;
+  min-height: 420px;
+}
+
+.tokenize-ai-chat-section .quick-questions {
+  margin-top: auto;
+}
+
+.parsing-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.translation-result {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--edge);
+}
+
+.translation-result h5 {
+  font-size: 14px;
+  color: var(--ink);
+  margin-bottom: 12px;
+}
+
+.translation-card {
+  background: var(--paper);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-md);
+  padding: 16px;
+}
+
+.translation-card p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--ink);
+}
+
+.translation-note {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--edge);
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+}
+
+.parsing-ai-chat-section {
+  flex: 1;
+  min-height: 420px;
+}
+
+.parsing-ai-chat-section .ai-messages {
+  max-height: none;
+  min-height: 260px;
+}
+
 .text-area {
   width: 100%;
   min-height: 100%; /* 占满剩余空间 */
@@ -990,6 +1453,10 @@ onMounted(() => {
   outline: none;
   border-color: var(--ink-soft);
   box-shadow: 0 0 0 3px rgba(74, 124, 38, 0.1);
+}
+
+.raw-editor {
+  min-height: 260px;
 }
 
 .text-hint {
@@ -1031,6 +1498,12 @@ onMounted(() => {
   border-radius: var(--radius-xl);
   padding: 20px;
   flex-shrink: 0; /* 防止面板被压缩 */
+}
+
+.tokenize-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
 }
 
 .sidebar-panel h4 {
@@ -1228,7 +1701,35 @@ onMounted(() => {
   border-radius: var(--radius-md);
   background: var(--paper);
   padding: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+  flex: 1; /* 占据可用空间 */
+}
+
+.ai-chat-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--edge);
+  display: flex;
+  flex-direction: column;
+  height: 550px; /* 给一个固定高度或更大的空间 */
+}
+
+.quick-questions {
+  margin-bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.quick-questions span {
+  font-size: 12px;
+  color: var(--ink-soft);
+  width: 100%;
+  margin-bottom: 4px;
 }
 
 .ai-message {
@@ -1322,6 +1823,24 @@ onMounted(() => {
 
   .text-area {
     min-height: 300px;
+    font-size: 16px;
+  }
+
+  .annotated-reader-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .annotated-content,
+  .annotated-empty {
+    font-size: 16px;
+  }
+
+  .parsing-content {
+    font-size: 17px;
+  }
+
+  .tokenized-content {
     font-size: 16px;
   }
 }
