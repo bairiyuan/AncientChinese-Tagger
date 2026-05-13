@@ -35,6 +35,11 @@ async def root():
     return {"message": "AncientChinese backend is running"}
 
 
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+
+
 @app.get("/db-sample")
 async def db_sample():
     data = fetch_sample_data()
