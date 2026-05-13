@@ -43,7 +43,15 @@ describe('api/ai', () => {
         mockResponse({
           code: 0,
           message: 'ok',
-          data: { sentence: '吾日三省吾身', grammar: '倒装句', meaning: '我每天多次反省自己' },
+          data: {
+            sentence: '吾日三省吾身',
+            grammar: '倒装句',
+            meaning: '我每天多次反省自己',
+            segments: [
+              { text: '吾', explanation: '我' },
+              { text: '日', explanation: '每天' },
+            ],
+          },
         }),
       )
 
@@ -53,6 +61,8 @@ describe('api/ai', () => {
       expect(result.sentence).toBe('吾日三省吾身')
       expect(result.grammar).toBe('倒装句')
       expect(result.meaning).toBe('我每天多次反省自己')
+      expect(result.segments).toHaveLength(2)
+      expect(result.segments?.[0]?.explanation).toBe('我')
     })
 
     it('throws on non-ok HTTP response', async () => {

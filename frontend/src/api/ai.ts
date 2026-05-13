@@ -4,6 +4,12 @@ export interface AnalysisResult {
   sentence: string
   grammar: string
   meaning: string
+  segments?: AnalysisSegment[]
+}
+
+export interface AnalysisSegment {
+  text: string
+  explanation: string
 }
 
 export interface ChatRequest {
