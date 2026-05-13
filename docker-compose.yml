@@ -1,0 +1,41 @@
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8080
+    depends_on:
+      - backend
+
+  backend:
+    build: ./backend
+    ports:
+      - "8080:8000"
+    environment:
+      - DATABASE_URL=mysql+pymysql://admin:dev123@db:3306/ancientchinese
+      - ENV=production
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: mysql:8.3.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: ancientchinese
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: dev123
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u admin -pdev123"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - mysqldata:/var/lib/mysql
+
+volumes:
+  mysqldata:
