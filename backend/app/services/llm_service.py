@@ -1,9 +1,13 @@
+import os
 import requests
 import json
 from typing import Dict, Any, List
 
-DEEPSEEK_API_KEY = "sk-7392bbb92a8947948744e2183038505f"
-DEEPSEEK_BASE_URL = "https://api.deepseek.com/chat/completions"
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/chat/completions")
+
+if not DEEPSEEK_API_KEY:
+    raise RuntimeError("DEEPSEEK_API_KEY environment variable is not set")
 
 def call_deepseek(messages: List[Dict[str, str]], temperature: float = 0.7, timeout: int = 60) -> str:
     headers = {
@@ -126,8 +130,8 @@ def tokenize_ancient_text(text: str) -> List[Dict[str, str]]:
     ]
     
     try:
-        # 设置较短的超时时间，例如 10 秒，以便快速触发降级
-        response_text = call_deepseek(messages, temperature=0.1, timeout=10)
+        # 设置较长的超时时间，例如 30 秒，确保 DeepSeek 能够完成复杂的古文分词
+        response_text = call_deepseek(messages, temperature=0.1, timeout=30)
         start = response_text.find('[')
         end = response_text.rfind(']') + 1
         if start != -1 and end != 0:

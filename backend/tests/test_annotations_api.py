@@ -111,10 +111,11 @@ def test_patch_with_invalid_span_should_fail(client, test_user, auth_headers) ->
     assert "参数错误" in resp.json()["detail"]
 
 
-def test_jieba_segment_text(client) -> None:
+def test_jieba_segment_text(client, auth_headers) -> None:
     resp = client.post(
         "/api/annotations/jieba-segment",
         json={"text": "项羽名籍"},
+        headers=auth_headers,
     )
     assert resp.status_code == 200
     body = resp.json()

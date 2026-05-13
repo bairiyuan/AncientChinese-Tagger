@@ -7,6 +7,8 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.dependencies.auth import get_current_user
+from app.models.user import User
 from app.services import annotations_service, documents_service
 from app.services.xunzi_service import call_xunzi_model
 from app.utils.document_utils import export_document_with_annotations, import_document
@@ -63,8 +65,9 @@ async def list_documents_by_project(
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(10, ge=1, le=100, description="每页数量"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    result = documents_service.list_documents_by_project(db=db, project_id=project_id)
+    result = documents_service.list_documents_by_project(db=db, project_id=project_id, current_user_id=current_user.id)
     items = result.get("data", [])
 
     total = len(items)
@@ -84,12 +87,13 @@ async def list_documents_by_project(
 
 
 @router.post("/api/projects/{project_id}/documents", status_code=201)
-async def create_document_in_project(project_id: int, body: DocumentCreate, db: Session = Depends(get_db)):
+async def create_document_in_project(project_id: int, body: DocumentCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = documents_service.create_document(
         db=db,
         project_id=project_id,
         title=body.title,
         content=body.content,
+        current_user_id=current_user.id,
     )
     return _success(result.get("code", 0), result.get("message", "success"), result.get("data"))
 
@@ -101,8 +105,9 @@ async def list_documents(
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(10, ge=1, le=100, description="每页数量"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    result = documents_service.search_documents(db=db, project_id=project_id, keyword=keyword)
+    result = documents_service.search_documents(db=db, project_id=project_id, keyword=keyword, current_user_id=current_user.id)
     items = result.get("data", [])
 
     total = len(items)
@@ -122,7 +127,7 @@ async def list_documents(
 
 
 @router.post("/api/projects/{project_id}/documents/import", status_code=201)
-async def import_document_api(project_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def import_document_api(project_id: int, file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     filename = file.filename or ""
     if not filename.lower().endswith(".txt"):
         raise HTTPException(status_code=400, detail="仅支持 txt 文件导入")
@@ -154,6 +159,7 @@ async def import_document_api(project_id: int, file: UploadFile = File(...), db:
         project_id=project_id,
         title=imported["title"],
         content=imported["content"],
+        current_user_id=current_user.id,
     )
     data = result.get("data") or {}
     data.setdefault("annotations", [])
@@ -161,11 +167,11 @@ async def import_document_api(project_id: int, file: UploadFile = File(...), db:
 
 
 @router.get("/api/documents/{document_id}/export")
-async def export_document_api(document_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    doc_result = documents_service.get_document_by_id(db=db, document_id=document_id)
+async def export_document_api(document_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    doc_result = documents_service.get_document_by_id(db=db, document_id=document_id, current_user_id=current_user.id)
     document = doc_result.get("data")
 
-    anno_result = annotations_service.search_annotations(db=db, document_id=document_id)
+    anno_result = annotations_service.search_annotations(db=db, document_id=document_id, current_user_id=current_user.id)
     annotations: List[dict] = [
         _annotation_to_api(item) for item in anno_result.get("data", []) if isinstance(item, dict)
     ]
@@ -187,33 +193,35 @@ async def export_document_api(document_id: int, background_tasks: BackgroundTask
 
 
 @router.post("/api/documents/xunzi/generate")
-async def generate_with_xunzi(body: XunziGenerateRequest):
+async def generate_with_xunzi(body: XunziGenerateRequest, current_user: User = Depends(get_current_user)):
     result = call_xunzi_model(body.text)
     return _success(0, "success", {"result": result})
 
 
 @router.get("/api/documents/{document_id}")
-async def get_document(document_id: int, db: Session = Depends(get_db)):
-    result = documents_service.get_document_by_id(db=db, document_id=document_id)
+async def get_document(document_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    result = documents_service.get_document_by_id(db=db, document_id=document_id, current_user_id=current_user.id)
     return _success(result.get("code", 0), result.get("message", "success"), result.get("data"))
 
 
 @router.put("/api/documents/{document_id}")
-async def update_document(document_id: int, body: DocumentUpdate, db: Session = Depends(get_db)):
+async def update_document(document_id: int, body: DocumentUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = documents_service.update_document(
         db=db,
         document_id=document_id,
         title=body.title,
         content=body.content,
+        current_user_id=current_user.id,
     )
     return _success(result.get("code", 0), result.get("message", "success"), result.get("data"))
 
 
 @router.patch("/api/documents/{document_id}")
-async def patch_document(document_id: int, body: DocumentPatch, db: Session = Depends(get_db)):
+async def patch_document(document_id: int, body: DocumentPatch, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = documents_service.patch_document(
         db=db,
         document_id=document_id,
+        current_user_id=current_user.id,
         title=body.title,
         content=body.content,
     )
@@ -221,6 +229,6 @@ async def patch_document(document_id: int, body: DocumentPatch, db: Session = De
 
 
 @router.delete("/api/documents/{document_id}")
-async def delete_document(document_id: int, db: Session = Depends(get_db)):
-    result = documents_service.delete_document(db=db, document_id=document_id)
+async def delete_document(document_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    result = documents_service.delete_document(db=db, document_id=document_id, current_user_id=current_user.id)
     return _success(result.get("code", 0), result.get("message", "success"), result.get("data"))
