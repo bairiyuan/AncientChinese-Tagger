@@ -6,7 +6,13 @@ load_dotenv()
 from fastapi import FastAPI  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
-from .database import fetch_sample_data  # noqa: E402
+from .database import fetch_sample_data, engine  # noqa: E402
+from .models.base import Base  # noqa: E402
+from .models import user, project, document, annotation  # noqa: E402
+
+# 自动创建数据库表
+Base.metadata.create_all(bind=engine)
+
 from .routes.annotations import router as annotations_router  # noqa: E402
 from .routes.documents import router as documents_router  # noqa: E402
 from .routes.projects import router as projects_router  # noqa: E402
