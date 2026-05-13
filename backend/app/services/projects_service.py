@@ -68,17 +68,17 @@ def create_project(db: Session, name: str, description: str, owner_id: int):
     return _success(_project_to_dict(project))
 
 
-def _verify_project_ownership(db: Session, project_id: int, current_user_id: int) -> Project:
+def _verify_project_ownership(db: Session, project_id: int, current_user_id: int, readonly: bool = False) -> Project:
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="项目不存在")
-    if project.owner_id != current_user_id:
+    if not readonly and project.owner_id != current_user_id:
         raise HTTPException(status_code=403, detail="无权操作该项目")
     return project
 
 
 def get_project_by_id(db: Session, project_id: int, current_user_id: int):
-    project = _verify_project_ownership(db, project_id, current_user_id)
+    project = _verify_project_ownership(db, project_id, current_user_id, readonly=True)
     return _success(_project_to_dict(project))
 
 

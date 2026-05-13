@@ -130,8 +130,8 @@ def tokenize_ancient_text(text: str) -> List[Dict[str, str]]:
     ]
     
     try:
-        # 设置较短的超时时间，例如 10 秒，以便快速触发降级
-        response_text = call_deepseek(messages, temperature=0.1, timeout=10)
+        # 设置较长的超时时间，例如 30 秒，确保 DeepSeek 能够完成复杂的古文分词
+        response_text = call_deepseek(messages, temperature=0.1, timeout=30)
         start = response_text.find('[')
         end = response_text.rfind(']') + 1
         if start != -1 and end != 0:
