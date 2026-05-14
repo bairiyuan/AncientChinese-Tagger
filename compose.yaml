@@ -1,13 +1,18 @@
 services:
   frontend:
-    build: ./frontend
+    image: node:22-alpine
+    working_dir: /app
+    entrypoint: [] # 彻底清除 Nginx 镜像自带的脚本干扰
     ports:
       - "5173:5173"
     volumes:
       - ./frontend:/app
-      - /app/node_modules
+      - /app/node_modules # 保护容器内的依赖，不被本地覆盖
     environment:
       - VITE_API_URL=http://localhost:8080
+      - VITE_USE_MOCK=false
+    command: >
+      sh -c "npm install && npm run dev -- --host 0.0.0.0"
     depends_on:
       - backend
 
@@ -15,9 +20,18 @@ services:
     build: ./backend
     ports:
       - "8080:8000"
+    volumes:
+      - ./backend:/app
     environment:
-      - DATABASE_URL=mysql+pymysql://admin:dev123@db:3306/ancientchinese
-      - ENV=production
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_USER=admin
+      - DB_PASSWORD=dev123
+      - DB_NAME=ancientchinese
+      - ENV=development
+      - JWT_SECRET=${JWT_SECRET}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
       db:
         condition: service_healthy

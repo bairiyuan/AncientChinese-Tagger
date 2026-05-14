@@ -1,40 +1,46 @@
 services:
   frontend:
-    image: ghcr.io/${GITHUB_REPOSITORY}:frontend-${VERSION:-latest}
+    image: ghcr.io/${GITHUB_REPOSITORY}/frontend:latest
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "80:8080"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/"]
       interval: 30s
       timeout: 10s
       retries: 3
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 128M
           cpus: "0.5"
 
   backend:
-    image: ghcr.io/${GITHUB_REPOSITORY}:backend-${VERSION:-latest}
+    image: ghcr.io/${GITHUB_REPOSITORY}/backend:latest
     restart: unless-stopped
     ports:
       - "8080:8000"
     environment:
-      - DATABASE_URL=mysql+pymysql://admin:${DB_PASSWORD}@db:3306/ancientchinese
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_USER=admin
+      - DB_NAME=ancientchinese
+      - DB_PASSWORD_FILE=/run/secrets/db_password
       - ENV=production
+      - JWT_SECRET=${JWT_SECRET}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
     depends_on:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: 512M
           cpus: "1.0"
 
   db:
