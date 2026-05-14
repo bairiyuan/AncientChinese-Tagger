@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 from .database import fetch_sample_data, engine  # noqa: E402
 from .models.base import Base  # noqa: E402
-from .models import user, project, document, annotation  # noqa: E402
+from .models import user, project, document, annotation  # noqa: F401, E402
 
 # 自动创建数据库表
 Base.metadata.create_all(bind=engine)
