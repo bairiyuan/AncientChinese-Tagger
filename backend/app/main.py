@@ -10,8 +10,12 @@ from .database import fetch_sample_data, engine  # noqa: E402
 from .models.base import Base  # noqa: E402
 from .models import user, project, document, annotation  # noqa: F401, E402
 
-# 自动创建数据库表
-Base.metadata.create_all(bind=engine)
+# 仅在非测试环境下自动创建数据库表
+if os.getenv("TESTING") != "true":
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        print(f"⚠️ 自动创建表失败 (这在 CI 测试环境下是正常的): {e}")
 
 from .routes.annotations import router as annotations_router  # noqa: E402
 from .routes.documents import router as documents_router  # noqa: E402
