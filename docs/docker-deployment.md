@@ -25,6 +25,27 @@ cp .env.example .env
 - `secrets/db_password.txt`: 数据库用户密码
 - `secrets/db_root_password.txt`: 数据库 Root 密码
 
+### 3. 切换数据库源 (重要)
+你可以根据需要选择使用 **Docker 内部数据库** 或 **远程云数据库**。修改根目录 `.env` 文件即可：
+
+#### **场景 A：使用 Docker 内部数据库 (推荐用于作业提交)**
+```env
+DB_HOST=db
+DB_PORT=3306
+DB_USER=admin
+DB_PASSWORD=dev123
+DB_NAME=ancientchinese
+```
+
+#### **场景 B：使用远程云服务器数据库**
+```env
+DB_HOST=121.196.168.115
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=你的云数据库密码
+DB_NAME=ancient
+```
+
 ---
 
 ## 🚀 运行开发环境
