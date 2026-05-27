@@ -1,15 +1,18 @@
 import os
+import time
+from datetime import datetime
 from dotenv import load_dotenv
 
 # 加载 .env 文件
 load_dotenv()
 
-from fastapi import FastAPI  # noqa: E402
+from fastapi import FastAPI, Request  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 from .database import fetch_sample_data, engine  # noqa: E402
 from .models.base import Base  # noqa: E402
 from .models import user, project, document, annotation  # noqa: F401, E402
+from .utils.logger import logger  # noqa: E402
 
 # 仅在非测试环境下自动创建数据库表
 if os.getenv("TESTING") != "true":
@@ -26,6 +29,36 @@ from .routes.ai import router as ai_router  # noqa: E402
 
 
 app = FastAPI(title="AncientChinese Backend")
+
+# 指标统计 (内存中简易版)
+metrics = {
+    "total_requests": 0,
+    "error_requests": 0,
+    "start_time": datetime.now().isoformat()
+}
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """
+    请求中间件：收集指标并记录日志
+    """
+    start_time = time.time()
+    metrics["total_requests"] += 1
+    
+    response = await call_next(request)
+    
+    process_time = time.time() - start_time
+    
+    if response.status_code >= 400:
+        metrics["error_requests"] += 1
+        
+    # 记录结构化请求日志
+    logger.info(
+        f"Request: {request.method} {request.url.path} "
+        f"Status: {response.status_code} Time: {process_time:.4f}s"
+    )
+    
+    return response
 
 app.add_middleware(
     CORSMiddleware,
@@ -48,7 +81,32 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    """
+    增强版健康检查端点
+    """
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "version": "1.0.0",
+        "uptime": metrics["start_time"]
+    }
+
+
+@app.get("/metrics")
+async def get_metrics():
+    """
+    基础指标收集端点
+    """
+    error_rate = 0
+    if metrics["total_requests"] > 0:
+        error_rate = (metrics["error_requests"] / metrics["total_requests"]) * 100
+        
+    return {
+        "total_requests": metrics["total_requests"],
+        "error_requests": metrics["error_requests"],
+        "error_rate": f"{error_rate:.2f}%",
+        "server_time": datetime.now().isoformat()
+    }
 
 
 @app.get("/db-sample")
