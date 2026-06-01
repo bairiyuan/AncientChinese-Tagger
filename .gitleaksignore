@@ -1,0 +1,3 @@
+# 忽略开发环境的硬编码密钥（仅用于教学项目）
+18e8e8f926c7851d71f637e9c6df85a1daf481f6:compose.yaml:generic-api-key:32
+db5fe14f4f94f81b50fbb0897f2988dadccaa01b:compose.yaml:generic-api-key:32

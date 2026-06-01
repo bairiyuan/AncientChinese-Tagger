@@ -1,0 +1,55 @@
+services:
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    entrypoint: [] # 彻底清除 Nginx 镜像自带的脚本干扰
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules # 保护容器内的依赖，不被本地覆盖
+    environment:
+      - VITE_API_URL=http://localhost:8080
+      - VITE_USE_MOCK=false
+    command: >
+      sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    depends_on:
+      - backend
+
+  backend:
+    build: ./backend
+    ports:
+      - "8080:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - ENV=development
+      - JWT_SECRET=${JWT_SECRET}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: mysql:8.3.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: ancientchinese
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: dev123
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u admin -pdev123"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - mysqldata:/var/lib/mysql
+
+volumes:
+  mysqldata:

@@ -28,21 +28,23 @@ def _document_to_dict(document: Document) -> Dict[str, Any]:
     }
 
 
-def _verify_document_ownership(db: Session, document_id: int, current_user_id: int) -> Document:
+def _verify_document_ownership(db: Session, document_id: int, current_user_id: int, readonly: bool = False) -> Document:
     document = db.query(Document).filter(Document.id == document_id).first()
     if not document:
         raise HTTPException(status_code=404, detail="文档不存在")
+    if readonly:
+        return document
     project = db.query(Project).filter(Project.id == document.project_id).first()
     if project and project.owner_id != current_user_id:
         raise HTTPException(status_code=403, detail="无权操作该文档")
     return document
 
 
-def _verify_project_access(db: Session, project_id: int, current_user_id: int):
+def _verify_project_access(db: Session, project_id: int, current_user_id: int, readonly: bool = False):
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="项目不存在")
-    if project.owner_id != current_user_id:
+    if not readonly and project.owner_id != current_user_id:
         raise HTTPException(status_code=403, detail="无权操作该项目")
 
 
@@ -67,14 +69,14 @@ def create_document(db: Session, project_id: int, title: str, content: str, curr
 
 
 def get_document_by_id(db: Session, document_id: int, current_user_id: int):
-    document = _verify_document_ownership(db, document_id, current_user_id)
+    document = _verify_document_ownership(db, document_id, current_user_id, readonly=True)
     return _success(_document_to_dict(document))
 
 
 def list_documents_by_project(db: Session, project_id: int, current_user_id: int):
     if project_id is None:
         raise HTTPException(status_code=400, detail="请求参数错误")
-    _verify_project_access(db, project_id, current_user_id)
+    _verify_project_access(db, project_id, current_user_id, readonly=True)
 
     documents = (
         db.query(Document)
@@ -88,11 +90,12 @@ def list_documents_by_project(db: Session, project_id: int, current_user_id: int
 def search_documents(db: Session, project_id: Optional[int] = None, keyword: Optional[str] = None, current_user_id: Optional[int] = None):
     query = db.query(Document).join(Project, Document.project_id == Project.id)
 
-    if current_user_id is not None:
-        query = query.filter(Project.owner_id == current_user_id)
+    # 移除强制按当前用户过滤，允许搜索所有项目中的文档
+    # if current_user_id is not None:
+    #     query = query.filter(Project.owner_id == current_user_id)
 
     if project_id is not None:
-        _verify_project_access(db, project_id, current_user_id)
+        _verify_project_access(db, project_id, current_user_id, readonly=True)
         query = query.filter(Document.project_id == project_id)
 
     if keyword is not None and keyword != "":

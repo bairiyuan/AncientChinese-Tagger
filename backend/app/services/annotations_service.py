@@ -43,10 +43,12 @@ def _validate_span(start_pos: int, end_pos: int) -> None:
         raise HTTPException(status_code=400, detail="start_pos/end_pos 参数错误")
 
 
-def _verify_annotation_ownership(db: Session, annotation_id: int, current_user_id: int) -> Annotation:
+def _verify_annotation_ownership(db: Session, annotation_id: int, current_user_id: int, readonly: bool = False) -> Annotation:
     annotation = db.query(Annotation).filter(Annotation.id == annotation_id).first()
     if not annotation:
         raise HTTPException(status_code=404, detail="标注不存在")
+    if readonly:
+        return annotation
     document = db.query(Document).filter(Document.id == annotation.document_id).first()
     if document:
         project = db.query(Project).filter(Project.id == document.project_id).first()
@@ -55,10 +57,12 @@ def _verify_annotation_ownership(db: Session, annotation_id: int, current_user_i
     return annotation
 
 
-def _verify_document_access(db: Session, document_id: int, current_user_id: int):
+def _verify_document_access(db: Session, document_id: int, current_user_id: int, readonly: bool = False):
     document = db.query(Document).filter(Document.id == document_id).first()
     if not document:
         raise HTTPException(status_code=404, detail="文档不存在")
+    if readonly:
+        return
     project = db.query(Project).filter(Project.id == document.project_id).first()
     if project and project.owner_id != current_user_id:
         raise HTTPException(status_code=403, detail="无权操作该文档")
@@ -145,14 +149,14 @@ def create_annotations_bulk(
 
 
 def get_annotation_by_id(db: Session, annotation_id: int, current_user_id: int):
-    annotation = _verify_annotation_ownership(db, annotation_id, current_user_id)
+    annotation = _verify_annotation_ownership(db, annotation_id, current_user_id, readonly=True)
     return _success(_annotation_to_dict(annotation))
 
 
 def list_annotations_by_document(db: Session, document_id: int, current_user_id: int):
     if document_id is None:
         raise HTTPException(status_code=400, detail="请求参数错误")
-    _verify_document_access(db, document_id, current_user_id)
+    _verify_document_access(db, document_id, current_user_id, readonly=True)
 
     annotations = (
         db.query(Annotation)
@@ -173,19 +177,21 @@ def search_annotations(
 ):
     query = db.query(Annotation).join(Document, Annotation.document_id == Document.id).join(Project, Document.project_id == Project.id)
 
-    if current_user_id is not None:
-        query = query.filter(Project.owner_id == current_user_id)
+    # 移除强制按当前用户过滤
+    # if current_user_id is not None:
+    #     query = query.filter(Project.owner_id == current_user_id)
 
     if project_id is not None:
         project = db.query(Project).filter(Project.id == project_id).first()
         if not project:
             raise HTTPException(status_code=404, detail="项目不存在")
-        if current_user_id is not None and project.owner_id != current_user_id:
-            raise HTTPException(status_code=403, detail="无权操作该项目")
+        # 允许查看，不再检查 owner_id
+        # if current_user_id is not None and project.owner_id != current_user_id:
+        #     raise HTTPException(status_code=403, detail="无权操作该项目")
         query = query.filter(Document.project_id == project_id)
 
     if document_id is not None:
-        _verify_document_access(db, document_id, current_user_id)
+        _verify_document_access(db, document_id, current_user_id, readonly=True)
         query = query.filter(Annotation.document_id == document_id)
 
     if entity_type is not None:
