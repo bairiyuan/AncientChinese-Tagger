@@ -21,8 +21,8 @@ type ApiDocument = {
   project_id: number
   title: string | null
   content: string | null
-  parsed_result?: any
-  tokenized_result?: any
+  parsed_result?: Record<string, unknown>
+  tokenized_result?: Record<string, unknown>
   created_at: string
   updated_at: string
 }
