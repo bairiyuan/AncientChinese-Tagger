@@ -77,6 +77,8 @@ export interface Document {
   projectId: number
   title: string | null
   content: string | null
+  parsed_result?: any
+  tokenized_result?: any
   createdAt: string
   updatedAt: string
   deletedAt?: string
@@ -92,6 +94,8 @@ export type DocumentUpdate = DocumentCreate
 export interface DocumentPatch {
   title?: string
   content?: string
+  parsed_result?: any
+  tokenized_result?: any
 }
 
 export interface Annotation {

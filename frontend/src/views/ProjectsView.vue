@@ -32,7 +32,6 @@ const restoreIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="
 const plusIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`
 
 const projects = ref<Project[]>([])
-const trashedProjects = ref<Project[]>([])
 const isLoading = ref(true)
 const searchQuery = ref('')
 const showCreateModal = ref(false)
@@ -62,12 +61,6 @@ const projectStats = ref({
     other: 0
   }
 })
-
-// 删除确认
-const showDeleteConfirm = ref(false)
-
-// 回收站
-const showTrashModal = ref(false)
 
 const newProject = ref({
   name: '',
@@ -223,40 +216,6 @@ const handleRename = async () => {
   }
 }
 
-// 软删除（移入回收站）
-const softDeleteProject = () => {
-  if (!currentProject.value) return
-  const index = projects.value.findIndex(p => p.id === currentProject.value!.id)
-  if (index > -1) {
-    const proj = projects.value.splice(index, 1)[0] as Project
-    trashedProjects.value.push({ ...proj, deletedAt: new Date().toISOString() } as Project)
-  }
-  showMenuFor.value = null
-}
-
-// 执行彻底删除
-const handleDelete = () => {
-  if (!currentProject.value) return
-  trashedProjects.value = trashedProjects.value.filter(p => p.id !== currentProject.value!.id)
-  showDeleteConfirm.value = false
-  currentProject.value = null
-}
-
-// 恢复项目
-const restoreProject = (project: Project) => {
-  const index = trashedProjects.value.findIndex(p => p.id === project.id)
-  if (index > -1) {
-    const restored = trashedProjects.value.splice(index, 1)[0] as Project
-    projects.value.push({ ...restored, deletedAt: undefined } as Project)
-  }
-}
-
-// 打开回收站
-const openTrash = () => {
-  showMenuFor.value = null
-  showTrashModal.value = true
-}
-
 // 导出项目
 const handleExport = async () => {
   if (!currentProject.value) return
@@ -358,9 +317,6 @@ onUnmounted(() => {
                 placeholder="搜索项目..."
               />
             </div>
-            <button class="btn ghost" @click="openTrash" v-if="trashedProjects.length > 0">
-              🗑️ 回收站 ({{ trashedProjects.length }})
-            </button>
             <button class="btn primary" @click="showCreateModal = true">
               <span v-html="plusIcon"></span> 新建项目
             </button>
@@ -422,11 +378,6 @@ onUnmounted(() => {
       <button class="dropdown-item" @click="handleExport">
         <span v-html="exportIcon"></span>
         导出项目
-      </button>
-      <div class="dropdown-divider"></div>
-      <button class="dropdown-item danger" @click="softDeleteProject">
-        <span v-html="deleteIcon"></span>
-        删除到回收站
       </button>
     </div>
 
@@ -549,28 +500,6 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- 删除确认弹窗 -->
-    <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="showDeleteConfirm = false">
-      <div class="modal modal-confirm">
-        <div class="modal-header">
-          <h3>确认彻底删除</h3>
-          <button class="modal-close" @click="showDeleteConfirm = false">×</button>
-        </div>
-        <div class="confirm-content">
-          <p>确定要彻底删除项目「{{ currentProject?.name }}」吗？</p>
-          <p class="confirm-hint">此操作不可恢复</p>
-        </div>
-        <div class="modal-actions">
-          <button type="button" class="btn ghost" @click="showDeleteConfirm = false">
-            取消
-          </button>
-          <button type="button" class="btn danger" @click="handleDelete">
-            确认删除
-          </button>
-        </div>
-      </div>
-    </div>
-
     <!-- 创建项目弹窗 -->
     <div v-if="showCreateModal" class="modal-overlay" @click.self="showCreateModal = false">
       <div class="modal">
@@ -608,39 +537,6 @@ onUnmounted(() => {
             </button>
           </div>
         </form>
-      </div>
-    </div>
-
-    <!-- 回收站弹窗 -->
-    <div v-if="showTrashModal" class="modal-overlay" @click.self="showTrashModal = false">
-      <div class="modal modal-trash">
-        <div class="modal-header">
-          <h3>🗑️ 回收站</h3>
-          <button class="modal-close" @click="showTrashModal = false">×</button>
-        </div>
-        <div class="modal-body">
-          <div v-if="trashedProjects.length === 0" class="empty-trash">
-            <p>回收站是空的</p>
-          </div>
-          <div v-else class="trash-list">
-            <div v-for="proj in trashedProjects" :key="proj.id" class="trash-item">
-              <div class="trash-info">
-                <span class="trash-title">{{ proj.name }}</span>
-                <span class="trash-date">删除于 {{ formatDate(proj.deletedAt || proj.updatedAt) }}</span>
-              </div>
-              <div class="trash-actions">
-                <button class="btn ghost small" @click="restoreProject(proj)">
-                  <span v-html="restoreIcon"></span>
-                  恢复
-                </button>
-                <button class="btn danger small" @click="currentProject = proj; showDeleteConfirm = true; showTrashModal = false">
-                  <span v-html="deleteIcon"></span>
-                  彻底删除
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   </div>

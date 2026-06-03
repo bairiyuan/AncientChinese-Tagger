@@ -36,6 +36,8 @@ class DocumentUpdate(BaseModel):
 class DocumentPatch(BaseModel):
     title: Optional[str] = Field(None, min_length=1)
     content: Optional[str] = Field(None, min_length=1)
+    parsed_result: Optional[Any] = None
+    tokenized_result: Optional[Any] = None
 
 
 class XunziGenerateRequest(BaseModel):
@@ -224,6 +226,8 @@ async def patch_document(document_id: int, body: DocumentPatch, db: Session = De
         current_user_id=current_user.id,
         title=body.title,
         content=body.content,
+        parsed_result=body.parsed_result,
+        tokenized_result=body.tokenized_result,
     )
     return _success(result.get("code", 0), result.get("message", "success"), result.get("data"))
 

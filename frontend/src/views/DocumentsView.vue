@@ -32,13 +32,10 @@ const projectId = computed(() => Number(route.params.projectId))
 
 const project = ref<Project | null>(null)
 const documents = ref<Document[]>([])
-const trashedDocuments = ref<Document[]>([])
 const isLoading = ref(true)
 const searchQuery = ref('')
 const showCreateModal = ref(false)
-const showImportModal = ref(false)
 const showRenameModal = ref(false)
-const showTrashModal = ref(false)
 const showMenuFor = ref<number | null>(null)
 const menuPosition = ref({ x: 0, y: 0 })
 const currentDoc = ref<Document | null>(null)
@@ -152,39 +149,10 @@ const handleRename = async () => {
   }
 }
 
-// 软删除文档
-const softDeleteDoc = () => {
-  if (!currentDoc.value) return
-  const index = documents.value.findIndex(d => d.id === currentDoc.value!.id)
-  if (index > -1) {
-    documents.value.splice(index, 1)
-    trashedDocuments.value.push(currentDoc.value)
-  }
-  showMenuFor.value = null
-  currentDoc.value = null
-}
-
 // 点击其他地方关闭菜单
 const handleGlobalClick = () => {
   if (showMenuFor.value) {
     closeMenu()
-  }
-}
-
-// 恢复文档
-const restoreDoc = (doc: Document) => {
-  const index = trashedDocuments.value.findIndex(d => d.id === doc.id)
-  if (index > -1) {
-    trashedDocuments.value.splice(index, 1)
-    documents.value.unshift(doc)
-  }
-}
-
-// 彻底删除文档
-const permanentDeleteDoc = (doc: Document) => {
-  const index = trashedDocuments.value.findIndex(d => d.id === doc.id)
-  if (index > -1) {
-    trashedDocuments.value.splice(index, 1)
   }
 }
 </script>
@@ -232,8 +200,6 @@ const permanentDeleteDoc = (doc: Document) => {
             </div>
             <div class="action-buttons">
               <button class="btn ghost" @click="showCreateModal = true"><span v-html="plusIcon"></span>新建文档</button>
-              <button class="btn ghost" @click="showImportModal = true"><span v-html="uploadIcon"></span>导入文档</button>
-              <button class="btn ghost" @click="showTrashModal = true"><span v-html="trashIcon"></span>回收站</button>
               <button class="btn primary"><span v-html="downloadIcon"></span>导出文档</button>
             </div>
           </div>
@@ -289,11 +255,6 @@ const permanentDeleteDoc = (doc: Document) => {
             <span v-html="editIcon"></span>
             重命名
           </button>
-          <div class="dropdown-divider"></div>
-          <button class="dropdown-item danger" @click="softDeleteDoc">
-            <span v-html="deleteIcon"></span>
-            删除到回收站
-          </button>
         </div>
 
         <!-- 跳转链接 -->
@@ -343,34 +304,6 @@ const permanentDeleteDoc = (doc: Document) => {
       </div>
     </div>
 
-    <!-- 导入文档弹窗 -->
-    <div v-if="showImportModal" class="modal-overlay" @click.self="showImportModal = false">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>导入文档</h3>
-          <button class="modal-close" @click="showImportModal = false">×</button>
-        </div>
-        <div class="modal-form">
-          <div class="form-group">
-            <label>选择文件</label>
-            <div class="upload-area">
-              <div class="upload-icon" v-html="uploadIcon"></div>
-              <p>点击选择文件或拖拽文件到此处</p>
-              <p class="upload-hint">支持 .txt, .doc, .docx, .pdf 格式</p>
-            </div>
-          </div>
-          <div class="modal-actions">
-            <button type="button" class="btn ghost" @click="showImportModal = false">
-              取消
-            </button>
-            <button type="button" class="btn primary">
-              导入
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- 重命名文档弹窗 -->
     <div v-if="showRenameModal" class="modal-overlay" @click.self="showRenameModal = false">
       <div class="modal">
@@ -398,49 +331,6 @@ const permanentDeleteDoc = (doc: Document) => {
             </button>
           </div>
         </form>
-      </div>
-    </div>
-
-    <!-- 回收站弹窗 -->
-    <div v-if="showTrashModal" class="modal-overlay" @click.self="showTrashModal = false">
-      <div class="modal modal-lg">
-        <div class="modal-header">
-          <h3>回收站</h3>
-          <button class="modal-close" @click="showTrashModal = false">×</button>
-        </div>
-        <div class="modal-body">
-          <div v-if="trashedDocuments.length === 0" class="empty-state-sm">
-            <p>回收站为空</p>
-          </div>
-          <div v-else class="trash-list">
-            <div
-              v-for="doc in trashedDocuments"
-              :key="doc.id"
-              class="trash-item"
-            >
-              <div class="trash-info">
-                <span class="trash-icon" v-html="docIcon"></span>
-                <div>
-                  <h4>{{ doc.title }}</h4>
-                  <p>删除于 {{ formatDate(doc.updatedAt) }}</p>
-                </div>
-              </div>
-              <div class="trash-actions">
-                <button class="btn ghost btn-sm" @click="restoreDoc(doc)">
-                  <span v-html="restoreIcon"></span>
-                  恢复
-                </button>
-                <button class="btn danger btn-sm" @click="permanentDeleteDoc(doc)">
-                  <span v-html="deleteIcon"></span>
-                  彻底删除
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn ghost" @click="showTrashModal = false">关闭</button>
-        </div>
       </div>
     </div>
   </div>

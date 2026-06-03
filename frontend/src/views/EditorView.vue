@@ -259,6 +259,15 @@ const loadData = async () => {
     const data = await mockApi.getDocument(documentId.value)
     if (data) {
       document.value = data
+      
+      // 加载解析和分词缓存
+      if (data.parsed_result) {
+        parsedResult.value = data.parsed_result
+      }
+      if (data.tokenized_result) {
+        tokenizeResult.value = data.tokenized_result
+      }
+
       // 如果后端返回的数据中包含标注，则使用后端的数据
       const documentWithAnnotations = data as DocumentWithAnnotations
       if (documentWithAnnotations.annotations) {
@@ -453,6 +462,10 @@ const handleParsing = async () => {
   try {
     const result = await aiApi.analyzeText(document.value.content)
     parsedResult.value = result
+    // 保存解析缓存
+    await mockApi.updateDocument(documentId.value, {
+      parsed_result: result
+    })
   } catch (error) {
     console.error('解析失败:', error)
     alert('AI解析失败，请检查网络或稍后再试')
@@ -513,6 +526,10 @@ const handleTokenize = async () => {
   try {
     const result = await aiApi.tokenizeText(document.value.content)
     tokenizeResult.value = result
+    // 保存分词缓存
+    await mockApi.updateDocument(documentId.value, {
+      tokenized_result: result
+    })
   } catch (error) {
     console.error('分词失败:', error)
     alert('分词失败，请稍后再试')
@@ -891,7 +908,7 @@ onMounted(() => {
               <p class="panel-desc">基于NLP的古文智能断句与语法分析</p>
 
               <button class="btn primary full" @click="handleParsing">
-                {{ isParsing ? '解析中...' : '开始解析' }}
+                {{ isParsing ? '解析中...' : (parsedResult ? '重新解析' : '开始解析') }}
               </button>
 
               <div class="translation-result">
@@ -956,7 +973,7 @@ onMounted(() => {
               <p class="panel-desc">基于NLP的智能分词与词性标注</p>
 
               <button class="btn primary full" @click="handleTokenize">
-                {{ isTokenizing ? '分词中...' : '开始分词' }}
+                {{ isTokenizing ? '分词中...' : (tokenizeResult.length > 0 ? '重新分词' : '开始分词') }}
               </button>
 
               <div class="ai-chat-section tokenize-ai-chat-section">

@@ -21,6 +21,8 @@ type ApiDocument = {
   project_id: number
   title: string | null
   content: string | null
+  parsed_result?: any
+  tokenized_result?: any
   created_at: string
   updated_at: string
 }
@@ -67,6 +69,8 @@ const toDocument = (item: ApiDocument): Document => ({
   projectId: item.project_id,
   title: item.title,
   content: item.content,
+  parsed_result: item.parsed_result,
+  tokenized_result: item.tokenized_result,
   createdAt: item.created_at,
   updatedAt: item.updated_at,
 })
@@ -270,6 +274,8 @@ export const mockApi = {
       body: {
         title: data.title,
         content: data.content,
+        parsed_result: data.parsed_result,
+        tokenized_result: data.tokenized_result,
       },
     })
     return toDocument(updated)

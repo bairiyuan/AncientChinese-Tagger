@@ -1,60 +1,106 @@
-# AncientChinese
+# AncientChinese-Tagger 汉语智能标注平台
 
 [![CI](https://github.com/bairiyuan/AncientChinese-Tagger/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/bairiyuan/AncientChinese-Tagger/actions)
 [![codecov backend](https://codecov.io/gh/bairiyuan/AncientChinese-Tagger/branch/develop/graph/badge.svg?flag=backend)](https://codecov.io/gh/bairiyuan/AncientChinese-Tagger)
 [![codecov frontend](https://codecov.io/gh/bairiyuan/AncientChinese-Tagger/branch/develop/graph/badge.svg?flag=frontend)](https://codecov.io/gh/bairiyuan/AncientChinese-Tagger)
 
-汉语智能标注平台 - 古汉语文本处理与标注系统
+> **面向古汉语研究与教学的沉浸式智能处理工作台**
 
-figma链接：<https://www.figma.com/design/ihRPLQpRDVUGJyPdDE2xhA/AncientChinese?node-id=0-1&t=ZTJSgGmVLfg1Mtxp-1>
+AncientChinese-Tagger 是一个融合了人工智能与古典文献学的综合性学术平台。它旨在通过深度学习技术（DeepSeek LLM）与经典 NLP 工具（jieba），解决古文处理中繁琐的断句、分词、实体识别及背景理解等痛点，为研究者提供一个从原始文献到结构化数据的全流程处理环境。
 
-## 团队成员
+***
 
-| 姓名  | 学号         | 分工     |
-| --- | ---------- | ------ |
-| 周芷伊 | 2312190211 | 前端     |
-| 朱孔峥 | 2312190231 | 后端     |
-| 张贤文 | 2312190210 | api+联调 |
+## 👥 团队成员与分工
 
-## 项目简介
+| 姓名      | 学号         | 核心职责                                                                        |
+| ------- | ---------- | --------------------------------------------------------------------------- |
+| **周芷伊** | 2312190211 | **前端架构**：负责 Vue 3 响应式工作台开发、UI/UX 美学设计、动态图例系统。                               |
+| **朱孔峥** | 2312190231 | **后端开发**：负责 FastAPI 核心架构、数据库模型设计、业务逻辑实现。                                    |
+| **张贤文** | 2312190210 | **全栈开发与智能化赋能**：主导 DeepSeek AI 深度集成；负责项目管理模块前后端联调；搭建 CI/CD 自动化流线与系统可观测性监控体系。 |
 
-AncientChinese 是一个面向古汉语文本研究与教学的智能标注平台，旨在为古文资料的整理、分析与利用提供高效便捷的工具支持。平台集成了项目管理、文本处理、实体标注与智能问答等多种功能，能够帮助用户对古汉语文献进行结构化处理与语义分析。系统支持基于 jieba 的自动分词，并结合人工标注与 AI 自动标注技术，对人物、地名、时间等实体信息进行识别与标注。同时，平台接入大语言模型，实现对古文内容的智能解析与问答，辅助用户理解复杂语句与历史背景。用户还可以对项目和文档进行统一管理，并将完成标注的数据进行导出，便于后续研究、统计分析或数据共享，从而提升古汉语文本处理与研究的效率。
+🔗 **设计稿 (Figma)**: [查看原型设计](https://www.figma.com/design/ihRPLQpRDVUGJyPdDE2xhA/AncientChinese?node-id=0-1)
 
-## 主要功能
+***
 
-- **项目与文档管理**：支持项目增删改查、文档增删改查导入导出
-- **实体标注**：手动标注或 AI 自动标注人物、地名、时间、等实体
-- **古文答疑解析**：基于 AI 大模型对古文内容进行提问和智能答疑解析
-- **自动分词**：基于 jieba 的中文分词功能
-- **数据导出**：将完成标注的文档进行导出
+## ✨ 核心功能模块
 
-  ![1](./docs/1.png)
+### 1. 智能文献处理
 
-## 项目结构
+- **深度古文解析**：接入 DeepSeek-V3 大模型，支持长文本（如《桃花源记》）的完整断句、语法分析与白话文翻译。
+- **自动词性标注**：结合古汉语语料优化的分词算法，支持 10+ 类古汉语专用词性标注（如：名、动、形、副、助等）。
+- **智能分段渲染**：解析结果自动保留原文段落结构，解决传统 AI 处理长文本时的截断与丢失问题。
 
+### 2. 交互式标注系统
+
+- **混合标注模式**：支持 AI 自动预标注与人工精细化修正。
+- **动态图例引导**：实体标注界面实时显示类型图例（人物、地名、时间、概念等），通过色彩系统辅助快速核对。
+- **持久化缓存**：每一篇文档的解析与分词结果均实现数据库级缓存，支持“秒开”历史记录，亦可一键重新解析。
+
+### 3. 学术辅助工具
+
+- **全场景 AI 助手**：从首页咨询到编辑器深挖，AI 助手全程随行，支持 Markdown 渲染，提供沉浸式学术问答。
+- **多格式数据导出**：支持将标注后的结构化数据导出，便于后续统计分析或二次研究。
+
+***
+
+## 🛠️ 技术架构
+
+### 前端 (Frontend)
+
+- **核心框架**: Vue 3 (Composition API) + TypeScript
+- **构建工具**: Vite
+- **渲染引擎**: Markdown-it (AI 回复渲染) + DOMPurify (安全过滤)
+- **视觉风格**: 自定义护眼宣纸美学系统，响应式布局
+
+### 后端 (Backend)
+
+- **核心框架**: FastAPI (Python 3.12+)
+- **数据库**: MySQL 8.0+ (支持远程云端与本地容器切换)
+- **AI 引擎**: DeepSeek API + 提示词工程 (Prompt Engineering)
+- **日志监控**: 结构化 JSON 日志 + `/health` 健康检查端点
+
+***
+
+## 📊 系统监控与可观测性
+
+项目内置了完善的监控体系，满足工业级运维需求：
+
+1. **健康检查**: 通过 `http://localhost:8080/health` 实时获取服务状态。
+2. **结构化日志**: 采用 JSON 格式输出，记录每一条 API 请求、AI 调用耗时及数据库状态。
+3. **版本控制**: 规范的 Git 分支管理（develop/feature/main）与提交历史。
+
+***
+
+## � 快速启动
+
+### 方式一：Docker 容器化启动 (推荐)
+
+```bash
+# 1. 准备配置文件
+cp .env.example .env
+
+# 2. 一键启动
+docker compose up -d --build
 ```
+
+### 方式二：Windows 本地开发启动
+
+详细步骤请参阅：[📖 完整部署指南](./docs/deployment-guide.md)
+
+***
+
+## 📁 项目结构
+
+```text
 AncientChinese/
-├── docs/                 
-│   ├── frontend.md         # 前端说明
-│   ├── backend.md             # 后端说明
-│   └── api.md                # API设计
-├── frontend/                # 前端代码             
-├── backend/              # 后端代码
-├── .gitignore        
-└── README.md            # 项目整体说明
+├── backend/                # FastAPI 后端核心
+│   ├── app/                # 业务逻辑 (Models, Routes, Services)
+│   └── Dockerfile          # 容器构建
+├── frontend/               # Vue 3 前端应用
+│   ├── src/                # 源码 (Views, API, Components)
+│   └── .env.local          # 本地配置
+├── docs/                   # 详尽的技术文档与 SQL 脚本
+├── compose.yaml            # Docker 编排配置
+└── README.md               # 项目门户
 ```
-
-## 技术栈
-
-### 前端
-
-- 原生 HTML/CSS/JavaScript
-
-### 后端
-
-- Python+FastAPI
-
-### 数据库
-
-- MySQL
 
