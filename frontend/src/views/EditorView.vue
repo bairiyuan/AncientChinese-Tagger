@@ -217,11 +217,11 @@ const annotationTextSegments = computed<HighlightSegment[]>(() => {
 })
 
 const tokenizedWords = computed(() => {
-  return tokenizeResult.value.filter(token => token.word.trim().length > 0)
+  return tokenizeResult.value.filter(token => token.word === '\n' || token.word.trim().length > 0)
 })
 
 const parsingSegments = computed(() => {
-  return (parsedResult.value?.segments || []).filter(segment => segment.text.length > 0)
+  return (parsedResult.value?.segments || []).filter(segment => segment.text === '\n' || segment.text.length > 0)
 })
 
 // 内联添加实体类型
@@ -259,6 +259,15 @@ const loadData = async () => {
     const data = await mockApi.getDocument(documentId.value)
     if (data) {
       document.value = data
+      
+      // 加载解析和分词缓存
+      if (data.parsed_result) {
+        parsedResult.value = data.parsed_result
+      }
+      if (data.tokenized_result) {
+        tokenizeResult.value = data.tokenized_result
+      }
+
       // 如果后端返回的数据中包含标注，则使用后端的数据
       const documentWithAnnotations = data as DocumentWithAnnotations
       if (documentWithAnnotations.annotations) {
@@ -453,6 +462,10 @@ const handleParsing = async () => {
   try {
     const result = await aiApi.analyzeText(document.value.content)
     parsedResult.value = result
+    // 保存解析缓存
+    await mockApi.updateDocument(documentId.value, {
+      parsed_result: result
+    })
   } catch (error) {
     console.error('解析失败:', error)
     alert('AI解析失败，请检查网络或稍后再试')
@@ -513,6 +526,10 @@ const handleTokenize = async () => {
   try {
     const result = await aiApi.tokenizeText(document.value.content)
     tokenizeResult.value = result
+    // 保存分词缓存
+    await mockApi.updateDocument(documentId.value, {
+      tokenized_result: result
+    })
   } catch (error) {
     console.error('分词失败:', error)
     alert('分词失败，请稍后再试')
@@ -638,9 +655,17 @@ onMounted(() => {
                       <h4>正文高亮预览</h4>
                       <p>左侧直接显示实体颜色，便于快速核对标注位置</p>
                     </div>
-                    <button class="btn ghost small" @click="showRawEditor = !showRawEditor">
-                      {{ showRawEditor ? '收起原文编辑' : '编辑原文' }}
-                    </button>
+                    <div class="header-actions">
+                      <div class="annotation-legend">
+                        <div v-for="type in entityTypes" :key="type.value" class="legend-item">
+                          <span class="legend-dot" :style="{ background: type.color }"></span>
+                          <span class="legend-label">{{ type.label }}</span>
+                        </div>
+                      </div>
+                      <button class="btn ghost small" @click="showRawEditor = !showRawEditor">
+                        {{ showRawEditor ? '收起原文编辑' : '编辑原文' }}
+                      </button>
+                    </div>
                   </div>
 
                   <div v-if="annotationTextSegments.length > 0" class="annotated-content">
@@ -694,15 +719,14 @@ onMounted(() => {
                   </div>
 
                   <div v-if="tokenizedWords.length > 0" class="tokenized-content">
-                    <span
-                      v-for="(token, index) in tokenizedWords"
-                      :key="`${token.word}-${token.pos}-${index}`"
-                      class="tokenized-inline"
-                    >
-                      <span class="tokenized-word-text">{{ token.word }}</span>
-                      <span class="tokenized-word-pos" :class="token.pos">{{ token.pos }}</span>
-                      <span v-if="index < tokenizedWords.length - 1" class="tokenized-separator">/</span>
-                    </span>
+                    <template v-for="(token, index) in tokenizedWords" :key="`${token.word}-${token.pos}-${index}`">
+                      <br v-if="token.word === '\n'" />
+                      <span v-else class="tokenized-inline">
+                        <span class="tokenized-word-text">{{ token.word }}</span>
+                        <span class="tokenized-word-pos" :class="token.pos">{{ token.pos }}</span>
+                        <span v-if="index < tokenizedWords.length - 1 && tokenizedWords[index+1].word !== '\n'" class="tokenized-separator">/</span>
+                      </span>
+                    </template>
                   </div>
                   <div v-else class="annotated-empty">
                     暂未生成分词结果，请点击右侧“开始分词”。
@@ -734,8 +758,9 @@ onMounted(() => {
 
                   <div v-if="parsingSegments.length > 0" class="parsing-content">
                     <template v-for="(segment, index) in parsingSegments" :key="`${segment.text}-${index}`">
+                      <br v-if="segment.text === '\n'" />
                       <span
-                        v-if="segment.explanation"
+                        v-else-if="segment.explanation"
                         class="parsing-segment has-tooltip"
                         tabindex="0"
                       >
@@ -883,7 +908,7 @@ onMounted(() => {
               <p class="panel-desc">基于NLP的古文智能断句与语法分析</p>
 
               <button class="btn primary full" @click="handleParsing">
-                {{ isParsing ? '解析中...' : '开始解析' }}
+                {{ isParsing ? '解析中...' : (parsedResult ? '重新解析' : '开始解析') }}
               </button>
 
               <div class="translation-result">
@@ -948,7 +973,7 @@ onMounted(() => {
               <p class="panel-desc">基于NLP的智能分词与词性标注</p>
 
               <button class="btn primary full" @click="handleTokenize">
-                {{ isTokenizing ? '分词中...' : '开始分词' }}
+                {{ isTokenizing ? '分词中...' : (tokenizeResult.length > 0 ? '重新分词' : '开始分词') }}
               </button>
 
               <div class="ai-chat-section tokenize-ai-chat-section">
@@ -1205,6 +1230,40 @@ onMounted(() => {
   gap: 12px;
 }
 
+.header-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.annotation-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: var(--paper);
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--edge);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.legend-label {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
 .annotated-reader-header h4 {
   margin: 0 0 4px;
   font-size: 18px;
@@ -1414,6 +1473,7 @@ onMounted(() => {
   font-size: 14px;
   line-height: 1.8;
   color: var(--ink);
+  white-space: pre-wrap; /* 关键：保留换行符并自动换行 */
 }
 
 .translation-note {
@@ -1742,14 +1802,6 @@ onMounted(() => {
   word-break: break-word;
 }
 
-.ai-message :deep(p) {
-  margin: 0 0 8px 0;
-}
-
-.ai-message :deep(p:last-child) {
-  margin-bottom: 0;
-}
-
 .ai-message :deep(strong) {
   font-weight: 700;
   color: var(--ink);
@@ -1773,6 +1825,15 @@ onMounted(() => {
 .ai-message.ai {
   background: var(--paper);
   border: 1px solid var(--edge);
+  white-space: normal; /* AI 回复使用 Markdown 渲染，不需要 pre-wrap */
+}
+
+.ai-message.ai :deep(p) {
+  margin: 0 0 12px 0;
+}
+
+.ai-message.ai :deep(p:last-child) {
+  margin-bottom: 0;
 }
 
 .ai-message.loading {
