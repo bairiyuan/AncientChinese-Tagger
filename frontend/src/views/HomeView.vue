@@ -1,8 +1,16 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { aiApi } from '@/api'
+import MarkdownIt from 'markdown-it'
+import DOMPurify from 'dompurify'
 
+const md = new MarkdownIt()
 const router = useRouter()
+
+const renderAiMessageHtml = (text: string) => {
+  return DOMPurify.sanitize(md.render(text))
+}
 
 // SVG 图标
 const brandIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>`
@@ -79,17 +87,25 @@ const askQuestion = async (q?: string) => {
   question.value = ''
   isLoading.value = true
 
-  // 模拟AI回答
-  setTimeout(() => {
-    let answer = '感谢您的提问。根据古文智能分析系统，我会认真分析这个问题并给出专业的解答。'
-    if (questionText.includes('论语') || questionText.includes('学而')) {
-      answer = '这句话出自《论语·学而》篇首，是孔子关于学习的重要论述。"学而时习之"强调学习与实践的结合，"有朋自远方来"体现了儒家对友谊的重视，"人不知而不愠"则展示了君子应有的胸怀与修养。'
-    } else if (questionText.includes('诗经')) {
-      answer = '《诗经》是中国最早的诗歌总集，收录了从西周初年到春秋中叶的诗歌305篇，分为"风"、"雅"、"颂"三部分，反映了当时的社会生活与文化风貌。'
-    }
+  try {
+    const history = messages.value.slice(1, -1).map(m => ({
+      role: m.type === 'user' ? 'user' : 'assistant',
+      content: m.text
+    }))
+
+    const answer = await aiApi.aiChat({
+      text: "用户正在首页进行古文咨询。请以古文研究助手的身份回答。",
+      question: questionText,
+      history
+    })
+
     messages.value.push({ type: 'ai', text: answer })
+  } catch (error) {
+    console.error('Home AI Chat failed:', error)
+    messages.value.push({ type: 'ai', text: '抱歉，古文智能助手暂时无法回答这个问题，请稍后再试。' })
+  } finally {
     isLoading.value = false
-  }, 1500)
+  }
 }
 </script>
 
@@ -133,7 +149,6 @@ const askQuestion = async (q?: string) => {
           </p>
           <div class="hero-actions">
             <button class="btn primary lg" @click="goToRegister">立即开始</button>
-            <button class="btn outline lg">观看演示</button>
           </div>
         </div>
         <div class="hero-preview">
@@ -208,7 +223,8 @@ const askQuestion = async (q?: string) => {
                 :key="index"
                 :class="['message', msg.type]"
               >
-                {{ msg.text }}
+                <div v-if="msg.type === 'ai'" v-html="renderAiMessageHtml(msg.text)"></div>
+                <template v-else>{{ msg.text }}</template>
               </div>
               <div v-if="isLoading" class="message ai loading">
                 <span class="loading-dots">思考中</span>
@@ -620,6 +636,24 @@ const askQuestion = async (q?: string) => {
   background: var(--white);
   border: 1px solid var(--edge);
   width: 85%;
+}
+
+.message.ai :deep(p) {
+  margin-bottom: 8px;
+}
+
+.message.ai :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.message.ai :deep(strong) {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.message.ai :deep(ul), .message.ai :deep(ol) {
+  margin: 8px 0;
+  padding-left: 20px;
 }
 
 .message.loading {

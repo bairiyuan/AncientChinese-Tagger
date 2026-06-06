@@ -16,14 +16,6 @@ const docIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" 
 
 const editIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`
 
-const deleteIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`
-
-const trashIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>`
-
-const restoreIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>`
-
-const uploadIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>`
-
 const downloadIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>`
 
 const plusIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`
@@ -32,13 +24,10 @@ const projectId = computed(() => Number(route.params.projectId))
 
 const project = ref<Project | null>(null)
 const documents = ref<Document[]>([])
-const trashedDocuments = ref<Document[]>([])
 const isLoading = ref(true)
 const searchQuery = ref('')
 const showCreateModal = ref(false)
-const showImportModal = ref(false)
 const showRenameModal = ref(false)
-const showTrashModal = ref(false)
 const showMenuFor = ref<number | null>(null)
 const menuPosition = ref({ x: 0, y: 0 })
 const currentDoc = ref<Document | null>(null)
@@ -152,39 +141,10 @@ const handleRename = async () => {
   }
 }
 
-// 软删除文档
-const softDeleteDoc = () => {
-  if (!currentDoc.value) return
-  const index = documents.value.findIndex(d => d.id === currentDoc.value!.id)
-  if (index > -1) {
-    documents.value.splice(index, 1)
-    trashedDocuments.value.push(currentDoc.value)
-  }
-  showMenuFor.value = null
-  currentDoc.value = null
-}
-
 // 点击其他地方关闭菜单
 const handleGlobalClick = () => {
   if (showMenuFor.value) {
     closeMenu()
-  }
-}
-
-// 恢复文档
-const restoreDoc = (doc: Document) => {
-  const index = trashedDocuments.value.findIndex(d => d.id === doc.id)
-  if (index > -1) {
-    trashedDocuments.value.splice(index, 1)
-    documents.value.unshift(doc)
-  }
-}
-
-// 彻底删除文档
-const permanentDeleteDoc = (doc: Document) => {
-  const index = trashedDocuments.value.findIndex(d => d.id === doc.id)
-  if (index > -1) {
-    trashedDocuments.value.splice(index, 1)
   }
 }
 </script>
@@ -232,8 +192,6 @@ const permanentDeleteDoc = (doc: Document) => {
             </div>
             <div class="action-buttons">
               <button class="btn ghost" @click="showCreateModal = true"><span v-html="plusIcon"></span>新建文档</button>
-              <button class="btn ghost" @click="showImportModal = true"><span v-html="uploadIcon"></span>导入文档</button>
-              <button class="btn ghost" @click="showTrashModal = true"><span v-html="trashIcon"></span>回收站</button>
               <button class="btn primary"><span v-html="downloadIcon"></span>导出文档</button>
             </div>
           </div>
@@ -289,11 +247,6 @@ const permanentDeleteDoc = (doc: Document) => {
             <span v-html="editIcon"></span>
             重命名
           </button>
-          <div class="dropdown-divider"></div>
-          <button class="dropdown-item danger" @click="softDeleteDoc">
-            <span v-html="deleteIcon"></span>
-            删除到回收站
-          </button>
         </div>
 
         <!-- 跳转链接 -->
@@ -343,34 +296,6 @@ const permanentDeleteDoc = (doc: Document) => {
       </div>
     </div>
 
-    <!-- 导入文档弹窗 -->
-    <div v-if="showImportModal" class="modal-overlay" @click.self="showImportModal = false">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>导入文档</h3>
-          <button class="modal-close" @click="showImportModal = false">×</button>
-        </div>
-        <div class="modal-form">
-          <div class="form-group">
-            <label>选择文件</label>
-            <div class="upload-area">
-              <div class="upload-icon" v-html="uploadIcon"></div>
-              <p>点击选择文件或拖拽文件到此处</p>
-              <p class="upload-hint">支持 .txt, .doc, .docx, .pdf 格式</p>
-            </div>
-          </div>
-          <div class="modal-actions">
-            <button type="button" class="btn ghost" @click="showImportModal = false">
-              取消
-            </button>
-            <button type="button" class="btn primary">
-              导入
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- 重命名文档弹窗 -->
     <div v-if="showRenameModal" class="modal-overlay" @click.self="showRenameModal = false">
       <div class="modal">
@@ -398,49 +323,6 @@ const permanentDeleteDoc = (doc: Document) => {
             </button>
           </div>
         </form>
-      </div>
-    </div>
-
-    <!-- 回收站弹窗 -->
-    <div v-if="showTrashModal" class="modal-overlay" @click.self="showTrashModal = false">
-      <div class="modal modal-lg">
-        <div class="modal-header">
-          <h3>回收站</h3>
-          <button class="modal-close" @click="showTrashModal = false">×</button>
-        </div>
-        <div class="modal-body">
-          <div v-if="trashedDocuments.length === 0" class="empty-state-sm">
-            <p>回收站为空</p>
-          </div>
-          <div v-else class="trash-list">
-            <div
-              v-for="doc in trashedDocuments"
-              :key="doc.id"
-              class="trash-item"
-            >
-              <div class="trash-info">
-                <span class="trash-icon" v-html="docIcon"></span>
-                <div>
-                  <h4>{{ doc.title }}</h4>
-                  <p>删除于 {{ formatDate(doc.updatedAt) }}</p>
-                </div>
-              </div>
-              <div class="trash-actions">
-                <button class="btn ghost btn-sm" @click="restoreDoc(doc)">
-                  <span v-html="restoreIcon"></span>
-                  恢复
-                </button>
-                <button class="btn danger btn-sm" @click="permanentDeleteDoc(doc)">
-                  <span v-html="deleteIcon"></span>
-                  彻底删除
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn ghost" @click="showTrashModal = false">关闭</button>
-        </div>
       </div>
     </div>
   </div>

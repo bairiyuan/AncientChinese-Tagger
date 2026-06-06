@@ -1,10 +1,15 @@
 import os
 import time
 from datetime import datetime
+from pathlib import Path
 from dotenv import load_dotenv
 
-# 加载 .env 文件
-load_dotenv()
+# 智能加载 .env 文件：优先当前目录，其次向上查找
+env_path = Path('.') / '.env'
+if not env_path.exists():
+    env_path = Path('..') / '.env'
+
+load_dotenv(dotenv_path=env_path)
 
 from fastapi import FastAPI, Request  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402

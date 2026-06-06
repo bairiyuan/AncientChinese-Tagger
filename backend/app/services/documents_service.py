@@ -23,6 +23,8 @@ def _document_to_dict(document: Document) -> Dict[str, Any]:
         "project_id": document.project_id,
         "title": document.title,
         "content": document.content,
+        "parsed_result": document.parsed_result,
+        "tokenized_result": document.tokenized_result,
         "created_at": document.created_at.isoformat() if document.created_at else None,
         "updated_at": document.updated_at.isoformat() if document.updated_at else None,
     }
@@ -127,8 +129,16 @@ def update_document(db: Session, document_id: int, title: str, content: str, cur
     return _success(_document_to_dict(document))
 
 
-def patch_document(db: Session, document_id: int, current_user_id: int, title: Optional[str] = None, content: Optional[str] = None):
-    if title is None and content is None:
+def patch_document(
+    db: Session, 
+    document_id: int, 
+    current_user_id: int, 
+    title: Optional[str] = None, 
+    content: Optional[str] = None,
+    parsed_result: Optional[Any] = None,
+    tokenized_result: Optional[Any] = None
+):
+    if title is None and content is None and parsed_result is None and tokenized_result is None:
         raise HTTPException(status_code=400, detail="至少提供一个可更新字段")
 
     document = _verify_document_ownership(db, document_id, current_user_id)
@@ -140,6 +150,12 @@ def patch_document(db: Session, document_id: int, current_user_id: int, title: O
 
     if content is not None:
         document.content = content
+
+    if parsed_result is not None:
+        document.parsed_result = parsed_result
+
+    if tokenized_result is not None:
+        document.tokenized_result = tokenized_result
 
     document.updated_at = datetime.utcnow()
 
