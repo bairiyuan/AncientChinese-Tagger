@@ -81,8 +81,14 @@ docker compose logs -f backend
 # 查看前端实时日志
 docker compose logs -f frontend
 
-# 停止并删除所有容器
+# 停止并删除所有容器（清理环境）
 docker compose down
+
+# 仅停止容器（保留容器，可快速恢复）
+docker compose stop
+
+# 重新启动已停止的容器
+docker compose start
 ```
 
 ---
