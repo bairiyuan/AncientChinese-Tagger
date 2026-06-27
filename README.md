@@ -105,6 +105,7 @@ AncientChinese-Tagger/
 │   ├── __tests__/          # vitest 自动化测试
 │   └── Dockerfile          # 容器构建
 ├── docs/                   # 详尽的技术文档与设计图
+│   ├── 期末文档/             # 课程期末提交文档及相关资源
 ├── 期末文档/               # 课程期末提交文档及相关资源
 ├── compose.yaml            # Docker 编排配置
 └── README.md               # 项目门户
